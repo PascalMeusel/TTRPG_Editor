@@ -81,3 +81,9 @@ class CharacterController:
                 self.app_controller.on_character_or_npc_list_changed()
             else:
                 messagebox.showerror("Error", f"Could not find file for character '{char_name}'.")
+                # Add this method inside the CharacterController class
+    def get_character_list(self):
+        """Returns a list of character names for the current rule set."""
+        if self.current_rule_set:
+            return CharacterModel.get_for_ruleset(self.current_rule_set['name'])
+        return []

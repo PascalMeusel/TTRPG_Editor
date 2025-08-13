@@ -114,3 +114,9 @@ class NpcController:
                 self.app_controller.on_character_or_npc_list_changed()
             else:
                 messagebox.showerror("Error", f"Could not find file for NPC '{npc_name}'.")
+                # Add this method inside the NpcController class
+    def get_npc_list(self):
+        """Returns a list of NPC names for the current rule set."""
+        if self.current_rule_set:
+            return NpcModel.get_for_ruleset(self.current_rule_set['name'])
+        return []

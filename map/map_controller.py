@@ -1,84 +1,220 @@
 from tkinter import messagebox
 from .map_model import MapModel
 from .map_view import MapView
+import math
 
 class MapController:
-    """Controller for the Map Editor and Viewer."""
+    """Controller for all map interactions."""
     def __init__(self, app_controller, editor_tab, viewer_tab):
         self.app_controller = app_controller
         self.view = MapView(editor_tab, viewer_tab)
-        self.model = MapModel() # Start with a blank map
-        self.current_tool = "brush"
-        self.start_pos = None # For drawing shapes
+        self.model = MapModel()
+        self.current_tool = "select"
+        self.editor_start_pos = None
+        self.selected_tokens = []
+        self.token_being_dragged = None
+        self.drag_start_pos = {}
+        self.drag_preview_pos = None
+        self.char_controller = None
+        self.npc_controller = None
 
         self.view.setup_editor_ui(self)
         self.view.setup_viewer_ui(self)
+        self._initialize_blank_map()
         self.refresh_map_list()
 
-    def set_tool(self, tool_name):
-        self.current_tool = tool_name
+    def _initialize_blank_map(self):
+        """Silently creates a new blank map on startup using default values."""
+        self.model = MapModel()
+        self.view.map_name_entry.delete(0, 'end')
+        self.view.map_name_entry.insert(0, "New Blank Map")
+        self.view.update_dimension_fields(self.model)
+        self._redraw_all()
 
-    def on_canvas_press(self, event):
-        self.start_pos = (event.x, event.y)
-
-    def on_canvas_release(self, event):
-        if self.current_tool == "rect" and self.start_pos:
-            grid_size = self.model.grid_size
-            
-            # --- FIX: Ensure coordinates are correctly ordered ---
-            # Get the raw start and end coordinates from the drag
-            raw_x1 = self.start_pos[0] // grid_size
-            raw_y1 = self.start_pos[1] // grid_size
-            raw_x2 = event.x // grid_size
-            raw_y2 = event.y // grid_size
-            
-            # Determine the top-left (x0, y0) and bottom-right (x1, y1)
-            x0 = min(raw_x1, raw_x2)
-            y0 = min(raw_y1, raw_y2)
-            x1 = max(raw_x1, raw_x2)
-            y1 = max(raw_y1, raw_y2)
-
-            color = self.view.color_var.get()
-            
-            # Add the element with the guaranteed correct coordinate order
-            self.model.add_element({'type': 'rect', 'coords': (x0, y0, x1, y1), 'color': color})
-            self.view.draw_map_on_canvas(self.model)
-            # --- END FIX ---
-
-        self.start_pos = None
-
-    def on_canvas_drag(self, event):
-        if self.current_tool == "brush" or self.current_tool == "eraser":
-            grid_size = self.model.grid_size
-            x = event.x // grid_size
-            y = event.y // grid_size
-            color = self.view.color_var.get() if self.current_tool == "brush" else "#3C3C3C" # Eraser draws floor
-            
-            # Draw a 1x1 rect as a brush stroke
-            self.model.add_element({'type': 'rect', 'coords': (x, y, x + 1, y + 1), 'color': color})
-            self.view.draw_map_on_canvas(self.model)
-
-    def generate_dungeon(self):
-        if messagebox.askyesno("Confirm", "This will erase the current map. Are you sure?"):
-            self.model.generate_dungeon(room_max_size=8, room_min_size=4, max_rooms=20)
-            self.view.draw_map_on_canvas(self.model)
-
-    def save_map(self):
-        map_name = self.view.map_name_entry.get()
-        if not map_name:
-            messagebox.showerror("Error", "Please enter a name for the map.")
+    def new_map(self):
+        """Creates a new map using dimensions from the UI, asking for confirmation."""
+        if not messagebox.askyesno("Confirm", "This will erase the current map design. Are you sure?"):
             return
         
         try:
-            self.model.save_map(map_name)
+            w = int(self.view.width_entry.get())
+            h = int(self.view.height_entry.get())
+            scale = float(self.view.scale_entry.get())
+            if w <= 0 or h <= 0 or scale <= 0: raise ValueError("Dimensions must be positive")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid map dimensions or scale. Please enter positive numbers."); return
+            
+        self.model = MapModel(width=w, height=h, grid_scale=scale)
+        self.model.clear_map()
+        self.view.map_name_entry.delete(0, 'end')
+        self.view.map_name_entry.insert(0, "New Custom Map")
+        self.set_tool("select")
+        self._redraw_all()
+
+    def set_source_controllers(self, char_controller, npc_controller):
+        self.char_controller = char_controller
+        self.npc_controller = npc_controller
+
+    def handle_rule_set_load(self, rule_set):
+        self.update_token_placer_list()
+
+    def update_token_placer_list(self):
+        if not self.char_controller or not self.npc_controller: return
+        pc_list = [f"PC: {name}" for name in self.char_controller.get_character_list()]
+        npc_list = [f"NPC: {name}" for name in self.npc_controller.get_npc_list()]
+        self.view.update_token_placer_list(pc_list + npc_list)
+
+    def set_tool(self, tool_name):
+        self.current_tool = tool_name
+        if tool_name in ["brush", "rect"]:
+            self.selected_tokens = []
+            self._redraw_viewer_canvas()
+
+    def on_editor_canvas_press(self, event):
+        self.editor_start_pos = (event.x, event.y)
+
+    def on_editor_canvas_drag(self, event):
+        if self.current_tool == "brush":
+            x, y = event.x // self.model.grid_size, event.y // self.model.grid_size
+            self.model.add_element({'type': 'rect', 'coords': (x, y, x + 1, y + 1), 'color': self.view.color_var.get()})
+            self.view.draw_editor_canvas(self.model)
+
+    def on_editor_canvas_release(self, event):
+        if self.current_tool == "rect" and self.editor_start_pos:
+            x0 = min(self.editor_start_pos[0], event.x) // self.model.grid_size
+            y0 = min(self.editor_start_pos[1], event.y) // self.model.grid_size
+            x1 = max(self.editor_start_pos[0], event.x) // self.model.grid_size
+            y1 = max(self.editor_start_pos[1], event.y) // self.model.grid_size
+            self.model.add_element({'type': 'rect', 'coords': (x0, y0, x1 + 1, y1 + 1), 'color': self.view.color_var.get()})
+            self.view.draw_editor_canvas(self.model)
+        self.editor_start_pos = None
+
+    def on_viewer_canvas_press(self, event):
+        x_grid, y_grid = event.x // self.model.grid_size, event.y // self.model.grid_size
+        if self.current_tool == "place_token":
+            token_str = self.view.token_placer_list.get()
+            if not token_str or "No tokens" in token_str: return
+            token_type, token_name = token_str.split(': ', 1)
+            if self.model.add_token(token_name, token_type, x_grid, y_grid): self._redraw_viewer_canvas()
+            else: messagebox.showwarning("Warning", f"Token '{token_name}' is already on the map.")
+            self.set_tool("select")
+            return
+        
+        clicked_token = self.model.get_token_at(x_grid, y_grid)
+        if clicked_token:
+            self.token_being_dragged = clicked_token
+            self.drag_start_pos[clicked_token['name']] = (clicked_token['x'], clicked_token['y'])
+            if clicked_token not in self.selected_tokens:
+                self.selected_tokens = [clicked_token]
+        else:
+            self.selected_tokens = []
+        self._update_distance_display()
+        self._redraw_viewer_canvas()
+
+    def on_viewer_canvas_ctrl_press(self, event):
+        x_grid, y_grid = event.x // self.model.grid_size, event.y // self.model.grid_size
+        clicked_token = self.model.get_token_at(x_grid, y_grid)
+        if clicked_token:
+            if clicked_token in self.selected_tokens: self.selected_tokens.remove(clicked_token)
+            else: self.selected_tokens.append(clicked_token)
+            self._update_distance_display()
+            self._redraw_viewer_canvas()
+
+    def on_viewer_canvas_drag(self, event):
+        if not self.token_being_dragged: return
+        mouse_x, mouse_y = event.x, event.y
+        try: move_dist_m = float(self.view.movement_entry.get() or 0)
+        except ValueError: move_dist_m = 0
+        start_grid_x, start_grid_y = self.drag_start_pos[self.token_being_dragged['name']]
+        start_pixel_x = (start_grid_x + 0.5) * self.model.grid_size
+        start_pixel_y = (start_grid_y + 0.5) * self.model.grid_size
+        
+        if move_dist_m > 0:
+            dist_moved_pixels = math.sqrt((mouse_x - start_pixel_x)**2 + (mouse_y - start_pixel_y)**2)
+            max_dist_pixels = (move_dist_m / self.model.grid_scale) * self.model.grid_size
+            if dist_moved_pixels > max_dist_pixels and dist_moved_pixels > 0:
+                angle = math.atan2(mouse_y - start_pixel_y, mouse_x - start_pixel_x)
+                clamped_x = start_pixel_x + max_dist_pixels * math.cos(angle)
+                clamped_y = start_pixel_y + max_dist_pixels * math.sin(angle)
+                self.drag_preview_pos = (clamped_x, clamped_y)
+            else:
+                self.drag_preview_pos = (mouse_x, mouse_y)
+        else:
+            self.drag_preview_pos = (mouse_x, mouse_y)
+        self._redraw_viewer_canvas()
+
+    def on_viewer_canvas_release(self, event):
+        if self.token_being_dragged and self.drag_preview_pos:
+            final_x = int(self.drag_preview_pos[0] // self.model.grid_size)
+            final_y = int(self.drag_preview_pos[1] // self.model.grid_size)
+            self.model.move_token(self.token_being_dragged['name'], final_x, final_y)
+        self.token_being_dragged = None
+        self.drag_start_pos = {}
+        self.drag_preview_pos = None
+        self._redraw_viewer_canvas()
+
+    def _update_distance_display(self):
+        if len(self.selected_tokens) == 2:
+            dist_grid = self.model.calculate_distance(self.selected_tokens[0], self.selected_tokens[1])
+            dist_m = dist_grid * self.model.grid_scale
+            self.view.distance_label.configure(text=f"{dist_m:.1f} m")
+        else: self.view.distance_label.configure(text="-")
+
+    def _redraw_all(self):
+        self.view.draw_editor_canvas(self.model)
+        self.view.draw_viewer_canvas(self.model, self)
+
+    # --- FIX: This helper method was missing. ---
+    def _redraw_viewer_canvas(self):
+        """Helper method to specifically redraw the viewer canvas."""
+        self.view.draw_viewer_canvas(self.model, self)
+
+    def generate_dungeon(self):
+        if not messagebox.askyesno("Confirm", "This will erase the current map design. Are you sure?"): return
+        try:
+            w = int(self.view.width_entry.get())
+            h = int(self.view.height_entry.get())
+            scale = float(self.view.scale_entry.get())
+            if w <= 0 or h <= 0 or scale <= 0: raise ValueError("Dimensions must be positive")
+        except ValueError:
+            messagebox.showerror("Error", "Invalid map dimensions or scale."); return
+        self.model = MapModel(width=w, height=h, grid_scale=scale)
+        self.model.generate_dungeon(room_max_size=8, room_min_size=4, max_rooms=20)
+        self.view.map_name_entry.delete(0, 'end')
+        self.view.map_name_entry.insert(0, "Generated Dungeon")
+        self._redraw_all()
+
+    def save_map(self):
+        map_name = self.view.map_name_entry.get()
+        if not map_name: messagebox.showerror("Error", "Please enter a name for the map."); return
+        self.model.name = map_name
+        try:
+            self.model.save_map()
             messagebox.showinfo("Success", f"Map '{map_name}' saved successfully.")
             self.refresh_map_list()
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to save map: {e}")
+        except Exception as e: messagebox.showerror("Error", f"Failed to save map: {e}")
             
     def refresh_map_list(self):
         maps = MapModel.get_all_maps()
         self.view.update_map_list(maps)
         
     def load_map_for_viewing(self, map_name):
-        self.view.display_map_image(map_name)
+        loaded_model = MapModel.load(map_name)
+        if loaded_model:
+            self.model = loaded_model
+            self.view.map_name_entry.delete(0, 'end')
+            self.view.map_name_entry.insert(0, self.model.name)
+            self.view.update_dimension_fields(self.model)
+            self.set_tool("select")
+            self._redraw_all()
+        else:
+            messagebox.showerror("Error", f"Could not load map data for '{map_name}'.")
+
+    def delete_selected_tokens(self):
+        if not self.selected_tokens: messagebox.showinfo("Info", "No tokens selected to delete."); return
+        if messagebox.askyesno("Confirm", f"Are you sure you want to delete {len(self.selected_tokens)} token(s)?"):
+            for token in self.selected_tokens:
+                self.model.delete_token(token['name'])
+            self.selected_tokens = []
+            self._update_distance_display()
+            self._redraw_viewer_canvas()
