@@ -14,16 +14,15 @@ class RulesController:
         
     def populate_rule_set_list(self):
         rule_sets = self.model.get_all_rule_sets()
-        self.view.populate_rule_set_list(rule_sets)
+        self.view.populate_rule_set_list(rule_sets, self)
 
-    def on_rule_set_select(self, event):
-        try:
-            line_content = self.view.rule_set_listbox.get("current linestart", "current lineend").strip()
-            if line_content: self.selected_rule_set_name = line_content
-        except Exception: self.selected_rule_set_name = None; return
-        self.view.highlight_selection()
+    def on_rule_set_select(self, rule_set_name):
+        """Called when a rule set button is clicked."""
+        self.selected_rule_set_name = rule_set_name
+        self.view.highlight_selection(rule_set_name)
 
     def load_selected_rule_set(self):
+        """Loads the rule set that has been selected via its button."""
         rule_set_name = self.selected_rule_set_name
         if not rule_set_name:
             messagebox.showerror("Error", "Please select a rule set by clicking its name.")
@@ -31,9 +30,7 @@ class RulesController:
         
         rule_set_data = self.model.load_rule_set(rule_set_name)
         if rule_set_data:
-            # Update the local status display
             self.view.update_status(rule_set_name)
-            # Broadcast the load event to other controllers
             self.app_controller.on_rule_set_loaded(rule_set_data)
         else:
             messagebox.showerror("Error", "Failed to load rule set.")

@@ -5,6 +5,7 @@ class RulesView:
     def __init__(self, left_panel_frame, creation_tab_frame):
         self.left_panel_frame = left_panel_frame
         self.creation_tab_frame = creation_tab_frame
+        self.rule_set_buttons = [] # To keep track of the created buttons
 
     def setup_ui(self, controller):
         # --- Setup Left Panel (Selection) ---
@@ -19,58 +20,61 @@ class RulesView:
         self.status_label = ctk.CTkLabel(status_frame, text="None", font=ctk.CTkFont(size=12, weight="bold"))
         self.status_label.pack(side="left", padx=4)
 
-        self.rule_set_listbox = ctk.CTkTextbox(rules_frame, height=150)
-        self.rule_set_listbox.pack(pady=5, padx=10, fill="x")
-        self.rule_set_listbox.bind("<Button-1>", controller.on_rule_set_select)
+        # --- REPLACED Textbox with a Scrollable Frame for buttons ---
+        self.rule_list_frame = ctk.CTkScrollableFrame(rules_frame, height=150)
+        self.rule_list_frame.pack(pady=5, padx=10, fill="x")
+        
         ctk.CTkButton(rules_frame, text="Load Selected Rule Set", command=controller.load_selected_rule_set).pack(pady=10)
         
         # --- Setup Right Panel (Creation Tab) ---
-        # --- FIX: Build the entire tab UI in a container first for smoothness ---
         tab = self.creation_tab_frame
         container = ctk.CTkFrame(tab, fg_color="transparent")
         container.grid_columnconfigure((0,1), weight=1)
         container.grid_rowconfigure(4, weight=1)
-        
         ctk.CTkLabel(container, text="Create a New Rule Set", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, columnspan=2, padx=20, pady=20)
-        
         ctk.CTkLabel(container, text="Rule Set Name:", anchor="w").grid(row=1, column=0, columnspan=2, padx=20, sticky="w")
         self.rules_name_entry = ctk.CTkEntry(container)
         self.rules_name_entry.grid(row=1, column=0, columnspan=2, padx=20, pady=(0,10), sticky="ew")
-        
         ctk.CTkLabel(container, text="Attributes (comma-separated):", anchor="w").grid(row=2, column=0, columnspan=2, padx=20, sticky="w")
         self.rules_attrs_entry = ctk.CTkEntry(container)
         self.rules_attrs_entry.grid(row=2, column=0, columnspan=2, padx=20, pady=(0,10), sticky="ew")
         self.rules_attrs_entry.insert(0, "Strength, Dexterity, Hit Points")
-        
         ctk.CTkLabel(container, text="Skills (Skill:Attribute, one per line):", anchor="w").grid(row=3, column=0, padx=(20,10), sticky="w")
         self.rules_skills_text = ctk.CTkTextbox(container)
         self.rules_skills_text.grid(row=4, column=0, padx=(20,10), pady=(0,10), sticky="nsew")
         self.rules_skills_text.insert("1.0", "Athletics:Strength\nStealth:Dexterity")
-        
         ctk.CTkLabel(container, text="Formulas (Name:Formula, one per line):", anchor="w").grid(row=3, column=1, padx=(10,20), sticky="w")
         self.rules_formulas_text = ctk.CTkTextbox(container)
         self.rules_formulas_text.grid(row=4, column=1, padx=(10,20), pady=(0,10), sticky="nsew")
         self.rules_formulas_text.insert("1.0", "Dodge Chance:Dexterity * 2 + 10")
-        
         ctk.CTkButton(container, text="Save Rule Set", command=controller.save_new_rule_set).grid(row=5, column=0, columnspan=2, pady=20)
-        
-        # --- FIX: Pack the finished container to display it all at once ---
         container.pack(fill="both", expand=True)
 
-    def populate_rule_set_list(self, rule_sets):
-        self.rule_set_listbox.configure(state="normal")
-        self.rule_set_listbox.delete("1.0", "end")
+    def populate_rule_set_list(self, rule_sets, controller):
+        """Creates a button for each rule set inside the scrollable frame."""
+        # Clear old buttons
+        for btn in self.rule_set_buttons:
+            btn.destroy()
+        self.rule_set_buttons.clear()
+
         if not rule_sets:
-            self.rule_set_listbox.insert("end", "No rule sets found.")
+            ctk.CTkLabel(self.rule_list_frame, text="No rule sets found.").pack()
         else:
             for name in rule_sets:
-                self.rule_set_listbox.insert("end", f"{name}\n")
-        self.rule_set_listbox.configure(state="disabled")
+                # The lambda name=name is crucial to capture the correct name for each button
+                btn = ctk.CTkButton(self.rule_list_frame, text=name, 
+                                    command=lambda n=name: controller.on_rule_set_select(n),
+                                    fg_color="transparent", border_width=1, border_color="gray50")
+                btn.pack(pady=2, padx=5, fill="x")
+                self.rule_set_buttons.append(btn)
 
-    def highlight_selection(self):
-        self.rule_set_listbox.tag_remove("selected", "1.0", "end")
-        self.rule_set_listbox.tag_add("selected", "current linestart", "current lineend")
-        self.rule_set_listbox.tag_config("selected", background="#343638", foreground="#DCE4EE")
+    def highlight_selection(self, selected_name):
+        """Updates the appearance of the rule set buttons to show which is selected."""
+        for btn in self.rule_set_buttons:
+            if btn.cget("text") == selected_name:
+                btn.configure(fg_color="#3B8ED0", border_color="#3B8ED0") # Selected color
+            else:
+                btn.configure(fg_color="transparent", border_color="gray50") # Default color
 
     def update_status(self, rule_set_name):
         """Updates the status label with the name of the current rule set."""
