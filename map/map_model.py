@@ -13,7 +13,7 @@ class MapModel:
         self.width = width
         self.height = height
         self.grid_size = grid_size
-        self.map_elements = []  # List of dicts, e.g., {'type': 'rect', 'coords': (x1,y1,x2,y2), 'color': '#FFFFFF'}
+        self.map_elements = []
         self.maps_dir = "data/maps"
         if not os.path.exists(self.maps_dir):
             os.makedirs(self.maps_dir)
@@ -24,41 +24,52 @@ class MapModel:
 
     def generate_dungeon(self, room_max_size, room_min_size, max_rooms):
         """A simple dungeon generation algorithm."""
-        self.map_elements = [] # Clear existing map
+        self.map_elements = []
         rooms = []
 
-        # Add a background rectangle
-        self.add_element({'type': 'rect', 'coords': (0, 0, self.width, self.height), 'color': '#3C3C3C'}) # Dungeon floor
+        self.add_element({'type': 'rect', 'coords': (0, 0, self.width, self.height), 'color': '#3C3C3C'})
 
         for _ in range(max_rooms):
             w = random.randint(room_min_size, room_max_size)
             h = random.randint(room_min_size, room_max_size)
-            x = random.randint(1, self.width - w - 1)
-            y = random.randint(1, self.height - h - 1)
+            x = random.randint(1, self.width - w - 2)
+            y = random.randint(1, self.height - h - 2)
             
             new_room = {'x1': x, 'y1': y, 'x2': x + w, 'y2': y + h}
             
-            # Check for intersections
             if any(self._intersect(new_room, other_room) for other_room in rooms):
                 continue
 
-            # Add the room to the map elements
-            self.add_element({'type': 'rect', 'coords': (x, y, x+w, y+h), 'color': '#707070'})
+            self.add_element({'type': 'rect', 'coords': (new_room['x1'], new_room['y1'], new_room['x2'], new_room['y2']), 'color': '#707070'})
 
-            # Connect to the previous room
-            (new_x, new_y) = ( (x + w) // 2, (y + h) // 2 )
+            (new_x, new_y) = ((new_room['x1'] + new_room['x2']) // 2, (new_room['y1'] + new_room['y2']) // 2)
+
             if rooms:
-                (prev_x, prev_y) = ( (rooms[-1]['x1'] + rooms[-1]['x2']) // 2, (rooms[-1]['y1'] + rooms[-1]['y2']) // 2 )
+                (prev_x, prev_y) = ((rooms[-1]['x1'] + rooms[-1]['x2']) // 2, (rooms[-1]['y1'] + rooms[-1]['y2']) // 2)
                 
+                # --- FIX: Ensure corridor coordinates are correctly ordered ---
                 if random.randint(0, 1) == 1: # Horizontal then vertical
-                    self.add_element({'type': 'rect', 'coords': (prev_x, prev_y, new_x, prev_y + 1), 'color': '#707070'})
-                    self.add_element({'type': 'rect', 'coords': (new_x, prev_y, new_x + 1, new_y + 1), 'color': '#707070'})
+                    # Horizontal corridor
+                    h_x0 = min(prev_x, new_x)
+                    h_x1 = max(prev_x, new_x) + 1
+                    self.add_element({'type': 'rect', 'coords': (h_x0, prev_y, h_x1, prev_y + 1), 'color': '#707070'})
+                    # Vertical corridor
+                    v_y0 = min(prev_y, new_y)
+                    v_y1 = max(prev_y, new_y) + 1
+                    self.add_element({'type': 'rect', 'coords': (new_x, v_y0, new_x + 1, v_y1), 'color': '#707070'})
                 else: # Vertical then horizontal
-                    self.add_element({'type': 'rect', 'coords': (prev_x, prev_y, prev_x + 1, new_y), 'color': '#707070'})
-                    self.add_element({'type': 'rect', 'coords': (prev_x, new_y, new_x + 1, new_y + 1), 'color': '#707070'})
+                    # Vertical corridor
+                    v_y0 = min(prev_y, new_y)
+                    v_y1 = max(prev_y, new_y) + 1
+                    self.add_element({'type': 'rect', 'coords': (prev_x, v_y0, prev_x + 1, v_y1), 'color': '#707070'})
+                    # Horizontal corridor
+                    h_x0 = min(prev_x, new_x)
+                    h_x1 = max(prev_x, new_x) + 1
+                    self.add_element({'type': 'rect', 'coords': (h_x0, new_y, h_x1, new_y + 1), 'color': '#707070'})
+                # --- END FIX ---
             
             rooms.append(new_room)
-        return True # Generation successful
+        return True
 
     def _intersect(self, room1, room2):
         return (room1['x1'] <= room2['x2'] and room1['x2'] >= room2['x1'] and
@@ -67,7 +78,6 @@ class MapModel:
     def save_map(self, map_name):
         """Saves map data to JSON and renders a PNG image."""
         self.name = map_name
-        # Save JSON data
         json_path = os.path.join(self.maps_dir, f"{map_name.lower().replace(' ', '_')}.json")
         map_data = {
             'name': self.name, 'width': self.width, 'height': self.height, 
@@ -76,7 +86,6 @@ class MapModel:
         with open(json_path, 'w') as f:
             json.dump(map_data, f, indent=4)
         
-        # Save PNG image
         self.render_to_png(map_name)
 
     def render_to_png(self, map_name):

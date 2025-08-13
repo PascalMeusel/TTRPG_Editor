@@ -24,13 +24,27 @@ class MapController:
     def on_canvas_release(self, event):
         if self.current_tool == "rect" and self.start_pos:
             grid_size = self.model.grid_size
-            x1 = self.start_pos[0] // grid_size
-            y1 = self.start_pos[1] // grid_size
-            x2 = event.x // grid_size
-            y2 = event.y // grid_size
+            
+            # --- FIX: Ensure coordinates are correctly ordered ---
+            # Get the raw start and end coordinates from the drag
+            raw_x1 = self.start_pos[0] // grid_size
+            raw_y1 = self.start_pos[1] // grid_size
+            raw_x2 = event.x // grid_size
+            raw_y2 = event.y // grid_size
+            
+            # Determine the top-left (x0, y0) and bottom-right (x1, y1)
+            x0 = min(raw_x1, raw_x2)
+            y0 = min(raw_y1, raw_y2)
+            x1 = max(raw_x1, raw_x2)
+            y1 = max(raw_y1, raw_y2)
+
             color = self.view.color_var.get()
-            self.model.add_element({'type': 'rect', 'coords': (x1, y1, x2, y2), 'color': color})
+            
+            # Add the element with the guaranteed correct coordinate order
+            self.model.add_element({'type': 'rect', 'coords': (x0, y0, x1, y1), 'color': color})
             self.view.draw_map_on_canvas(self.model)
+            # --- END FIX ---
+
         self.start_pos = None
 
     def on_canvas_drag(self, event):

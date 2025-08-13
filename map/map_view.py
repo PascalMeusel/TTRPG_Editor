@@ -21,6 +21,7 @@ class MapView:
         toolbar = ctk.CTkFrame(self.editor_tab, width=150)
         # --- FIX: Changed sticky from "nswy" to "ns" to make it stretch vertically ---
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
+        
         ctk.CTkLabel(toolbar, text="Tools", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
         ctk.CTkButton(toolbar, text="Brush", command=lambda: controller.set_tool("brush")).pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Rectangle", command=lambda: controller.set_tool("rect")).pack(pady=5, padx=10, fill="x")
@@ -85,7 +86,8 @@ class MapView:
     def update_map_list(self, maps):
         """Updates the dropdown list in the viewer tab."""
         self.map_selection_list.configure(values=maps or ["No maps found"])
-        if not maps: self.map_selection_list.set("")
+        if not maps:
+            self.map_selection_list.set("")
         
     def display_map_image(self, map_name):
         """Loads and displays a rendered map PNG in the viewer."""
