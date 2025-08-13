@@ -1,0 +1,25 @@
+{
+    "name": "D&D 5e",
+    "attributes": [
+        "Strength",
+        "Dexterity",
+        "Constitution",
+        "Intelligence",
+        "Wisdom",
+        "Charisma",
+        "Hit Points"
+    ],
+    "skills": {
+        "Athletics": "Strength",
+        "Acrobatics": "Dexterity",
+        "Stealth": "Dexterity",
+        "Arcana": "Intelligence",
+        "History": "Intelligence",
+        "Insight": "Wisdom",
+        "Perception": "Wisdom",
+        "Persuasion": "Charisma"
+    },
+    "formulas": {
+        "Dodge Chance": "Dexterity * 2 + 10"
+    }
+}

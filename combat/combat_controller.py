@@ -1,0 +1,57 @@
+from tkinter import messagebox
+from .combat_model import CombatModel
+from .combat_view import CombatView
+from character.character_model import CharacterModel
+from npc.npc_model import NpcModel
+
+class CombatController:
+    """Controller for the Combat Simulator feature."""
+    def __init__(self, app_controller, tab_frame):
+        self.app_controller = app_controller
+        self.model = CombatModel()
+        self.view = CombatView(tab_frame)
+        self.current_rule_set = None
+        self.view.setup_ui(self)
+
+    def handle_rule_set_load(self, rule_set):
+        self.current_rule_set = rule_set
+        self.view.show_simulator(self)
+        self.update_combatant_lists()
+
+    def update_combatant_lists(self):
+        if not self.current_rule_set: return
+        rule_set_name = self.current_rule_set['name']
+        chars = [f"PC: {name}" for name in CharacterModel.get_for_ruleset(rule_set_name)]
+        npcs = [f"NPC: {name}" for name in NpcModel.get_for_ruleset(rule_set_name)]
+        combatants = sorted(chars + npcs)
+        self.view.update_combatant_lists(combatants)
+
+    def _get_combatant_from_selection(self, selection_str):
+        if not selection_str or selection_str == "-": return None, "No combatant selected."
+        try:
+            c_type, c_name = selection_str.split(': ', 1)
+            return (CharacterModel.load(c_name), None) if c_type == 'PC' else (NpcModel.load(c_name), None)
+        except Exception as e: return None, f"Error loading combatant: {e}"
+
+    def run_combat_hit(self):
+        attacker, err = self._get_combatant_from_selection(self.view.attacker_list.get())
+        if err: messagebox.showerror("Error", err); return
+        defender, err = self._get_combatant_from_selection(self.view.defender_list.get())
+        if err: messagebox.showerror("Error", err); return
+        try: roll = int(self.view.roll_entry.get())
+        except (ValueError, TypeError): messagebox.showerror("Error", "Dice Roll must be a number."); return
+        result_text, _ = self.model.check_hit(attacker, defender, roll, self.current_rule_set)
+        self.view.write_to_log(f"{attacker.name} attacks {defender.name} (Roll: {roll})...\n> {result_text}")
+
+    def run_combat_damage(self):
+        attacker, err = self._get_combatant_from_selection(self.view.attacker_list.get())
+        if err: messagebox.showerror("Error", err); return
+        defender, err = self._get_combatant_from_selection(self.view.defender_list.get())
+        if err: messagebox.showerror("Error", err); return
+        try:
+            roll = int(self.view.roll_entry.get())
+            modifier = int(self.view.mod_entry.get())
+        except (ValueError, TypeError): messagebox.showerror("Error", "Dice Roll and Modifier must be numbers."); return
+        result_text, _ = self.model.calculate_damage(attacker, defender, roll, modifier)
+        self.view.write_to_log(result_text)
+        self.view.write_to_log(f"--> Reminder: Manually update {defender.name}'s Hit Points on their sheet.")

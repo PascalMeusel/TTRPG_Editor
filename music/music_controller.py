@@ -1,0 +1,52 @@
+from tkinter import filedialog, messagebox
+from .music_model import MusicModel
+from .music_view import MusicView
+
+class MusicController:
+    """Controller for the Music Player feature."""
+    def __init__(self, app_controller, parent_frame):
+        self.app_controller = app_controller
+        self.model = MusicModel()
+        self.view = MusicView(parent_frame)
+        self.view.setup_ui(self)
+        self.refresh_music_list()
+
+    def refresh_music_list(self):
+        """Gets the updated song list from the model and tells the view to display it."""
+        songs = self.model.get_music_files()
+        self.view.update_music_list(songs)
+
+    def add_music(self):
+        """Opens a file dialog for the user to select music files to add."""
+        # Define the allowed file types
+        file_types = [("Audio Files", "*.mp3 *.wav"), ("All files", "*.*")]
+        
+        # Open the file dialog, allowing multiple selections
+        source_paths = filedialog.askopenfilenames(title="Select Music Files", filetypes=file_types)
+        
+        if not source_paths:
+            # User cancelled the dialog
+            return
+            
+        # Tell the model to copy the files
+        copied_count = self.model.add_music_files(source_paths)
+        
+        if copied_count > 0:
+            messagebox.showinfo("Music Added", f"Successfully added {copied_count} new song(s).")
+            # Refresh the list in the UI to show the new songs
+            self.refresh_music_list()
+        else:
+            messagebox.showwarning("No Music Added", "No new files were added. They may have already existed or there was an error.")
+
+    def play_song(self):
+        song = self.view.music_list.get()
+        self.model.play(song)
+
+    def pause_song(self):
+        self.model.toggle_pause()
+
+    def stop_song(self):
+        self.model.stop()
+
+    def set_volume(self, volume):
+        self.model.set_volume(volume)

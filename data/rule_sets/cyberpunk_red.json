@@ -1,0 +1,20 @@
+{
+    "name": "Cyberpunk Red",
+    "attributes": [
+        "Body",
+        "Reflexes",
+        "Tech",
+        "Intelligence",
+        "Cool",
+        "Hit Points"
+    ],
+    "skills": {
+        "Handguns": "Reflexes",
+        "Rifles": "Reflexes",
+        "Hacking": "Intelligence",
+        "Engineering": "Tech"
+    },
+    "formulas": {
+        "Evasion": "Reflexes * 3 + 5"
+    }
+}

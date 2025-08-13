@@ -1,0 +1,28 @@
+{
+    "name": "Ted",
+    "rule_set": "D&D 5e",
+    "attributes": {
+        "Strength": "314",
+        "Dexterity": "43",
+        "Constitution": "43",
+        "Intelligence": "43",
+        "Wisdom": "43",
+        "Charisma": "43",
+        "Hit Points": "43"
+    },
+    "skills": {
+        "Athletics": "4343",
+        "Acrobatics": "4343",
+        "Stealth": "43",
+        "Arcana": "43",
+        "History": "43",
+        "Insight": "43",
+        "Perception": "434",
+        "Persuasion": "43"
+    },
+    "inventory": [],
+    "gm_notes": "STRONK",
+    "loot": [
+        ""
+    ]
+}
