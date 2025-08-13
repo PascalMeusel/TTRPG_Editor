@@ -10,32 +10,33 @@ class CombatView:
 
     def setup_ui(self, controller):
         """Sets up the initial, static part of the UI."""
-        tab = self.tab_frame
-        tab.grid_columnconfigure(0, weight=1)
-        tab.grid_rowconfigure(1, weight=1) # Allow content frame to expand
+        # --- REFINED LAYOUT: Main container now expands ---
+        container = ctk.CTkFrame(self.tab_frame, fg_color="transparent")
+        container.pack(fill="both", expand=True)
+        container.grid_columnconfigure(0, weight=1)
+        container.grid_rowconfigure(1, weight=1)
         
-        ctk.CTkLabel(tab, text="Combat Assistant", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, pady=20)
+        ctk.CTkLabel(container, text="Combat Assistant", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, pady=20)
 
-        # This frame will hold either the initial message or the full simulator
-        self.content_frame = ctk.CTkFrame(tab, fg_color="transparent")
+        self.content_frame = ctk.CTkFrame(container, fg_color="transparent")
         self.content_frame.grid(row=1, column=0, sticky="nsew", padx=20)
         self.content_frame.grid_columnconfigure(0, weight=1)
         
-        # This label is shown by default and is destroyed when the simulator is built.
         self.initial_label = ctk.CTkLabel(self.content_frame, text="Load a rule set to use the simulator.")
         self.initial_label.pack(pady=20)
 
     def show_simulator(self, controller):
         """Builds the full simulator UI smoothly after a rule set is loaded."""
-        # Clear any existing content (like the initial message)
         for widget in self.content_frame.winfo_children():
             widget.destroy()
 
-        # Build the new UI in a temporary container for a smooth, single-frame update
         container = ctk.CTkFrame(self.content_frame, fg_color="transparent")
         
-        combatant_frame = ctk.CTkFrame(container, fg_color="transparent")
-        combatant_frame.pack(fill="x", pady=5)
+        # --- REFINED LAYOUT: Wrapped in an outline frame ---
+        combatant_frame_wrapper = ctk.CTkFrame(container)
+        combatant_frame_wrapper.pack(fill="x", pady=5, padx=10, ipady=5)
+        combatant_frame = ctk.CTkFrame(combatant_frame_wrapper, fg_color="transparent")
+        combatant_frame.pack(fill="x", padx=10)
         combatant_frame.grid_columnconfigure((0, 1), weight=1)
         ctk.CTkLabel(combatant_frame, text="Attacker:").grid(row=0, column=0, padx=(0,10), sticky="w")
         self.attacker_list = ctk.CTkComboBox(combatant_frame, state="readonly")
@@ -44,8 +45,11 @@ class CombatView:
         self.defender_list = ctk.CTkComboBox(combatant_frame, state="readonly")
         self.defender_list.grid(row=1, column=1, padx=(10,0), sticky="ew")
 
-        input_frame = ctk.CTkFrame(container, fg_color="transparent")
-        input_frame.pack(fill="x", pady=15)
+        # --- REFINED LAYOUT: Wrapped in an outline frame ---
+        input_frame_wrapper = ctk.CTkFrame(container)
+        input_frame_wrapper.pack(fill="x", pady=10, padx=10, ipady=5)
+        input_frame = ctk.CTkFrame(input_frame_wrapper, fg_color="transparent")
+        input_frame.pack(fill="x", padx=10)
         input_frame.grid_columnconfigure((0, 1), weight=1)
         ctk.CTkLabel(input_frame, text="Dice Roll:").grid(row=0, column=0, padx=(0,10), sticky="w")
         self.roll_entry = ctk.CTkEntry(input_frame)
@@ -57,15 +61,14 @@ class CombatView:
 
         action_frame = ctk.CTkFrame(container, fg_color="transparent")
         action_frame.pack(pady=10)
-        ctk.CTkButton(action_frame, text="Calculate Hit", command=controller.run_combat_hit).pack(side="left", padx=10)
-        ctk.CTkButton(action_frame, text="Calculate Damage", command=controller.run_combat_damage).pack(side="left", padx=10)
+        ctk.CTkButton(action_frame, text="Calculate Hit", height=40, command=controller.run_combat_hit).pack(side="left", padx=10)
+        ctk.CTkButton(action_frame, text="Calculate Damage", height=40, command=controller.run_combat_damage).pack(side="left", padx=10)
 
         output_frame = ctk.CTkScrollableFrame(container, label_text="Result Log")
-        output_frame.pack(fill="both", expand=True, pady=10)
+        output_frame.pack(fill="both", expand=True, pady=10, padx=10)
         self.output_text = ctk.CTkTextbox(output_frame, state="disabled", wrap="word", fg_color="transparent")
         self.output_text.pack(fill="both", expand=True)
 
-        # Show the fully built container all at once
         container.pack(fill="both", expand=True)
 
     def update_combatant_lists(self, combatants):

@@ -8,37 +8,29 @@ class MapView:
         self.editor_tab = editor_tab
         self.viewer_tab = viewer_tab
         self.map_photo_image = None
-        self.editor_bg_image = None # Separate reference for editor background
+        self.editor_bg_image = None
         self.PC_COLOR = "#00BFFF"
         self.NPC_COLOR = "#DC143C"
 
     def setup_editor_ui(self, controller):
-        """Builds the UI for the Map Editor tab."""
+        """Builds the entire static UI for the Map Editor tab ONCE."""
         self.editor_tab.grid_columnconfigure(1, weight=1)
         self.editor_tab.grid_rowconfigure(0, weight=1)
+        
         toolbar = ctk.CTkFrame(self.editor_tab, width=200)
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
         
-        # --- Map Creation ---
         ctk.CTkLabel(toolbar, text="Map Setup", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
-        dims_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
-        dims_frame.pack(fill="x", padx=10)
-        dims_frame.grid_columnconfigure((0, 1), weight=1)
-        ctk.CTkLabel(dims_frame, text="Width").grid(row=0, column=0)
-        self.width_entry = ctk.CTkEntry(dims_frame)
-        self.width_entry.grid(row=1, column=0, padx=(0,2))
-        self.width_entry.insert(0, "80")
-        ctk.CTkLabel(dims_frame, text="Height").grid(row=0, column=1)
-        self.height_entry = ctk.CTkEntry(dims_frame)
-        self.height_entry.grid(row=1, column=1, padx=(2,0))
-        self.height_entry.insert(0, "60")
-        ctk.CTkLabel(dims_frame, text="Grid Scale (m)").grid(row=2, column=0, pady=(5,0))
-        self.scale_entry = ctk.CTkEntry(dims_frame)
-        self.scale_entry.grid(row=3, column=0, padx=(0,2))
-        self.scale_entry.insert(0, "1.5")
-        ctk.CTkButton(toolbar, text="New Blank Map", command=controller.new_map).pack(pady=(10,5), padx=10, fill="x")
         
-        # --- Drawing Tools ---
+        dims_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        dims_frame.pack(fill="x", padx=10, pady=5)
+        ctk.CTkLabel(dims_frame, text="Grid Scale (m):").pack(anchor="w")
+        self.scale_entry = ctk.CTkEntry(dims_frame)
+        self.scale_entry.pack(fill="x")
+        self.scale_entry.insert(0, "1.5")
+        
+        ctk.CTkButton(toolbar, text="New Blank Map (50x50)", command=controller.new_map).pack(pady=(10,5), padx=10, fill="x")
+        
         ctk.CTkLabel(toolbar, text="Drawing Tools", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
         ctk.CTkButton(toolbar, text="Brush", command=lambda: controller.set_tool("brush")).pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Rectangle", command=lambda: controller.set_tool("rect")).pack(pady=5, padx=10, fill="x")
@@ -46,26 +38,24 @@ class MapView:
         colors = {"Stone": "#999999", "Grass": "#6B8E23", "Water": "#4682B4", "Wood": "#8B4513"}
         for name, code in colors.items(): ctk.CTkRadioButton(toolbar, text=name, variable=self.color_var, value=code).pack(anchor="w", padx=20, pady=2)
         
-        # --- Generator ---
         ctk.CTkLabel(toolbar, text="Generator", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        ctk.CTkButton(toolbar, text="Generate Dungeon", command=controller.generate_dungeon).pack(pady=5, padx=10, fill="x")
+        ctk.CTkButton(toolbar, text="Generate Dungeon (50x50)", command=controller.generate_dungeon).pack(pady=5, padx=10, fill="x")
         
-        # --- Saving ---
         ctk.CTkLabel(toolbar, text="Map Name").pack(pady=(20, 5))
         self.map_name_entry = ctk.CTkEntry(toolbar)
         self.map_name_entry.pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Save Map Background", command=controller.save_map).pack(pady=10, padx=10, fill="x")
         
-        canvas_frame = ctk.CTkFrame(self.editor_tab)
-        canvas_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        self.editor_canvas = ctk.CTkCanvas(canvas_frame, bg="#2B2B2B", highlightthickness=0)
-        self.editor_canvas.pack(fill="both", expand=True)
+        canvas_container = ctk.CTkScrollableFrame(self.editor_tab, label_text="Map Canvas")
+        canvas_container.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        
+        self.editor_canvas = ctk.CTkCanvas(canvas_container, bg="#2B2B2B", highlightthickness=0)
         self.editor_canvas.bind("<B1-Motion>", controller.on_editor_canvas_drag)
         self.editor_canvas.bind("<ButtonPress-1>", controller.on_editor_canvas_press)
         self.editor_canvas.bind("<ButtonRelease-1>", controller.on_editor_canvas_release)
 
     def setup_viewer_ui(self, controller):
-        """Builds the UI for the Map Viewer (live play) tab."""
+        """Builds the entire static UI for the Map Viewer tab ONCE."""
         self.viewer_tab.grid_columnconfigure(1, weight=1)
         self.viewer_tab.grid_rowconfigure(0, weight=1)
         toolbar = ctk.CTkFrame(self.viewer_tab, width=180)
@@ -86,23 +76,23 @@ class MapView:
         ctk.CTkLabel(toolbar, text="Distance:").pack(pady=(10, 0))
         self.distance_label = ctk.CTkLabel(toolbar, text="-", font=ctk.CTkFont(size=16, weight="bold"))
         self.distance_label.pack()
-        ctk.CTkButton(toolbar, text="Save Token Positions", command=controller.save_map).pack(side="bottom", pady=20, padx=10, fill="x")
-        canvas_frame = ctk.CTkFrame(self.viewer_tab)
-        canvas_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
-        self.viewer_canvas = ctk.CTkCanvas(canvas_frame, bg="#101010", highlightthickness=0)
-        self.viewer_canvas.pack(fill="both", expand=True)
+        ctk.CTkButton(toolbar, text="Save Token Positions", command=controller.save_token_positions).pack(side="bottom", pady=20, padx=10, fill="x")
+        
+        canvas_container = ctk.CTkScrollableFrame(self.viewer_tab, label_text="Live Map")
+        canvas_container.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
+        
+        self.viewer_canvas = ctk.CTkCanvas(canvas_container, bg="#101010", highlightthickness=0)
         self.viewer_canvas.bind("<Button-1>", controller.on_viewer_canvas_press)
         self.viewer_canvas.bind("<B1-Motion>", controller.on_viewer_canvas_drag)
         self.viewer_canvas.bind("<ButtonRelease-1>", controller.on_viewer_canvas_release)
         self.viewer_canvas.bind("<Control-Button-1>", controller.on_viewer_canvas_ctrl_press)
 
-    def save_canvas_to_png(self, filepath):
-        """Saves the current state of the editor canvas to a PNG file."""
+    def save_canvas_to_png(self, filepath, map_model):
         try:
             x = self.editor_canvas.winfo_rootx()
             y = self.editor_canvas.winfo_rooty()
-            width = self.editor_canvas.winfo_width()
-            height = self.editor_canvas.winfo_height()
+            width = map_model.width * map_model.grid_size
+            height = map_model.height * map_model.grid_size
             img = ImageGrab.grab(bbox=(x, y, x + width, y + height))
             img.save(filepath)
             return True
@@ -110,21 +100,35 @@ class MapView:
             print(f"Error saving canvas to PNG: {e}")
             return False
 
+    def _draw_grid(self, canvas, width, height, grid_size):
+        for i in range(0, width + 1, grid_size):
+            canvas.create_line(i, 0, i, height, tag="grid_line", fill="#444444")
+        for i in range(0, height + 1, grid_size):
+            canvas.create_line(0, i, width, i, tag="grid_line", fill="#444444")
+
     def draw_editor_canvas(self, map_model, background_png_path=None):
-        """Draws the editor canvas. If a path is provided, it uses it as a background."""
+        canvas_width = map_model.width * map_model.grid_size
+        canvas_height = map_model.height * map_model.grid_size
+        
+        self.editor_canvas.configure(width=canvas_width, height=canvas_height)
+        self.editor_canvas.pack(expand=True)
         self.editor_canvas.delete("all")
+        
         if background_png_path and os.path.exists(background_png_path):
-            img = Image.open(background_png_path)
-            self.editor_bg_image = ImageTk.PhotoImage(img)
-            self.editor_canvas.create_image(0, 0, anchor="nw", image=self.editor_bg_image, tags="background")
+            try:
+                img = Image.open(background_png_path).resize((canvas_width, canvas_height))
+                self.editor_bg_image = ImageTk.PhotoImage(img)
+                self.editor_canvas.create_image(0, 0, anchor="nw", image=self.editor_bg_image, tags="background")
+            except Exception as e:
+                print(f"Error loading editor background image: {e}")
         else:
-            grid_size = map_model.grid_size
             for elem in map_model.map_elements:
-                coords = tuple(c * grid_size for c in elem['coords'])
+                coords = tuple(c * map_model.grid_size for c in elem['coords'])
                 self.editor_canvas.create_rectangle(coords, fill=elem['color'], outline="")
+        
+        self._draw_grid(self.editor_canvas, canvas_width, canvas_height, map_model.grid_size)
 
     def draw_viewer_canvas(self, map_model, controller):
-        """Draws dynamic elements (tokens, overlays) on the viewer canvas."""
         self.viewer_canvas.delete("token", "overlay")
         grid_size = map_model.grid_size
         for token in map_model.tokens:
@@ -135,7 +139,6 @@ class MapView:
         self._draw_selection_overlay(map_model, controller)
 
     def _draw_token(self, canvas, token_data, grid_size, preview_pos=None):
-        """Helper to draw a single token."""
         color = self.PC_COLOR if token_data['type'] == 'PC' else self.NPC_COLOR
         center_x, center_y = preview_pos or ((token_data['x'] + 0.5) * grid_size, (token_data['y'] + 0.5) * grid_size)
         radius = grid_size * 0.4
@@ -143,7 +146,6 @@ class MapView:
         canvas.create_text(center_x, center_y, text=token_data['name'][0], fill="white", font=("Arial", 10, "bold"), tags="token")
 
     def _draw_selection_overlay(self, map_model, controller):
-        """Draws overlays like movement circles and distance lines."""
         if not controller.selected_tokens: return
         grid_size = map_model.grid_size
         if len(controller.selected_tokens) == 1:
@@ -170,24 +172,23 @@ class MapView:
         self.map_selection_list.configure(values=maps or ["No maps found"])
         if not maps: self.map_selection_list.set("")
 
-    def draw_static_background(self, map_name):
-        """Draws the static background image on the viewer canvas."""
+    def draw_static_background(self, map_name, map_model):
+        canvas_width = map_model.width * map_model.grid_size
+        canvas_height = map_model.height * map_model.grid_size
+        self.viewer_canvas.configure(width=canvas_width, height=canvas_height)
+        self.viewer_canvas.pack(expand=True)
         self.viewer_canvas.delete("all")
         if not map_name: return
-        png_path = os.path.join("data/maps", f"{map_name.lower().replace(' ', '_')}.png")
+        
+        png_path = os.path.join(map_model.maps_dir, f"{map_name.lower().replace(' ', '_')}.png")
         if os.path.exists(png_path):
             try:
-                img = Image.open(png_path)
+                img = Image.open(png_path).resize((canvas_width, canvas_height))
                 self.map_photo_image = ImageTk.PhotoImage(img)
                 self.viewer_canvas.create_image(0, 0, anchor="nw", image=self.map_photo_image, tags="background")
             except Exception as e:
                 print(f"Error loading map image: {e}")
 
     def update_dimension_fields(self, map_model):
-        """Updates the dimension entry fields with the loaded map's data."""
-        self.width_entry.delete(0, 'end')
-        self.width_entry.insert(0, str(map_model.width))
-        self.height_entry.delete(0, 'end')
-        self.height_entry.insert(0, str(map_model.height))
         self.scale_entry.delete(0, 'end')
         self.scale_entry.insert(0, str(map_model.grid_scale))

@@ -18,22 +18,15 @@ class MusicController:
 
     def add_music(self):
         """Opens a file dialog for the user to select music files to add."""
-        # Define the allowed file types
         file_types = [("Audio Files", "*.mp3 *.wav"), ("All files", "*.*")]
-        
-        # Open the file dialog, allowing multiple selections
         source_paths = filedialog.askopenfilenames(title="Select Music Files", filetypes=file_types)
         
-        if not source_paths:
-            # User cancelled the dialog
-            return
+        if not source_paths: return
             
-        # Tell the model to copy the files
         copied_count = self.model.add_music_files(source_paths)
         
         if copied_count > 0:
             messagebox.showinfo("Music Added", f"Successfully added {copied_count} new song(s).")
-            # Refresh the list in the UI to show the new songs
             self.refresh_music_list()
         else:
             messagebox.showwarning("No Music Added", "No new files were added. They may have already existed or there was an error.")

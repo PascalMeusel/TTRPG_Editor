@@ -5,11 +5,12 @@ import math
 import os
 
 class MapController:
-    """Controller for all map interactions."""
-    def __init__(self, app_controller, editor_tab, viewer_tab):
+    """Controller for all map interactions with a fixed grid size."""
+    def __init__(self, app_controller, editor_tab, viewer_tab, campaign_path):
         self.app_controller = app_controller
-        self.view = MapView(editor_tab, viewer_tab)
-        self.model = MapModel()
+        self.view = MapView(editor_tab, viewer_tab) # Correctly passes arguments
+        self.campaign_path = campaign_path
+        self.model = MapModel(self.campaign_path)
         self.current_tool = "select"
         self.editor_start_pos = None
         self.selected_tokens = []
@@ -25,27 +26,25 @@ class MapController:
         self.refresh_map_list()
 
     def _initialize_blank_map(self):
-        """Silently creates a new blank map on startup using default values."""
-        self.model = MapModel()
+        """Silently creates a new blank map model with default 50x50 dimensions."""
+        self.model = MapModel(self.campaign_path)
+        self.model.clear_map()
         self.view.map_name_entry.delete(0, 'end')
         self.view.map_name_entry.insert(0, "New Blank Map")
         self.view.update_dimension_fields(self.model)
         self._redraw_all()
 
     def new_map(self):
-        """Creates a new map using dimensions from the UI, asking for confirmation."""
+        """Creates a new 50x50 map, using the scale from the UI."""
         if not messagebox.askyesno("Confirm", "This will erase the current map design. Are you sure?"):
             return
-        
         try:
-            w = int(self.view.width_entry.get())
-            h = int(self.view.height_entry.get())
             scale = float(self.view.scale_entry.get())
-            if w <= 0 or h <= 0 or scale <= 0: raise ValueError("Dimensions must be positive")
+            if scale <= 0: raise ValueError("Scale must be positive")
         except ValueError:
-            messagebox.showerror("Error", "Invalid map dimensions or scale. Please enter positive numbers."); return
+            messagebox.showerror("Error", "Invalid grid scale. Please enter a positive number."); return
             
-        self.model = MapModel(width=w, height=h, grid_scale=scale)
+        self.model = MapModel(self.campaign_path, grid_scale=scale)
         self.model.clear_map()
         self.view.map_name_entry.delete(0, 'end')
         self.view.map_name_entry.insert(0, "New Custom Map")
@@ -79,6 +78,7 @@ class MapController:
             x, y = event.x // self.model.grid_size, event.y // self.model.grid_size
             self.model.add_element({'type': 'rect', 'coords': (x, y, x + 1, y + 1), 'color': self.view.color_var.get()})
             self.view.draw_editor_canvas(self.model)
+            self.app_controller.set_dirty_flag()
 
     def on_editor_canvas_release(self, event):
         if self.current_tool == "rect" and self.editor_start_pos:
@@ -88,6 +88,7 @@ class MapController:
             y1 = max(self.editor_start_pos[1], event.y) // self.model.grid_size
             self.model.add_element({'type': 'rect', 'coords': (x0, y0, x1 + 1, y1 + 1), 'color': self.view.color_var.get()})
             self.view.draw_editor_canvas(self.model)
+            self.app_controller.set_dirty_flag()
         self.editor_start_pos = None
 
     def on_viewer_canvas_press(self, event):
@@ -96,7 +97,9 @@ class MapController:
             token_str = self.view.token_placer_list.get()
             if not token_str or "No tokens" in token_str: return
             token_type, token_name = token_str.split(': ', 1)
-            if self.model.add_token(token_name, token_type, x_grid, y_grid): self._redraw_viewer_canvas()
+            if self.model.add_token(token_name, token_type, x_grid, y_grid):
+                self._redraw_viewer_canvas()
+                self.app_controller.set_dirty_flag()
             else: messagebox.showwarning("Warning", f"Token '{token_name}' is already on the map.")
             self.set_tool("select")
             return
@@ -129,7 +132,6 @@ class MapController:
         start_grid_x, start_grid_y = self.drag_start_pos[self.token_being_dragged['name']]
         start_pixel_x = (start_grid_x + 0.5) * self.model.grid_size
         start_pixel_y = (start_grid_y + 0.5) * self.model.grid_size
-        
         if move_dist_m > 0:
             dist_moved_pixels = math.sqrt((mouse_x - start_pixel_x)**2 + (mouse_y - start_pixel_y)**2)
             max_dist_pixels = (move_dist_m / self.model.grid_scale) * self.model.grid_size
@@ -148,7 +150,9 @@ class MapController:
         if self.token_being_dragged and self.drag_preview_pos:
             final_x = int(self.drag_preview_pos[0] // self.model.grid_size)
             final_y = int(self.drag_preview_pos[1] // self.model.grid_size)
-            self.model.move_token(self.token_being_dragged['name'], final_x, final_y)
+            if (self.token_being_dragged['x'], self.token_being_dragged['y']) != (final_x, final_y):
+                self.model.move_token(self.token_being_dragged['name'], final_x, final_y)
+                self.app_controller.set_dirty_flag()
         self.token_being_dragged = None
         self.drag_start_pos = {}
         self.drag_preview_pos = None
@@ -163,6 +167,7 @@ class MapController:
 
     def _redraw_all(self):
         self.view.draw_editor_canvas(self.model)
+        self.view.draw_static_background(self.model.name, self.model)
         self.view.draw_viewer_canvas(self.model, self)
 
     def _redraw_viewer_canvas(self):
@@ -171,17 +176,16 @@ class MapController:
     def generate_dungeon(self):
         if not messagebox.askyesno("Confirm", "This will erase the current map design. Are you sure?"): return
         try:
-            w = int(self.view.width_entry.get())
-            h = int(self.view.height_entry.get())
             scale = float(self.view.scale_entry.get())
-            if w <= 0 or h <= 0 or scale <= 0: raise ValueError("Dimensions must be positive")
+            if scale <= 0: raise ValueError("Scale must be positive")
         except ValueError:
-            messagebox.showerror("Error", "Invalid map dimensions or scale."); return
-        self.model = MapModel(width=w, height=h, grid_scale=scale)
-        self.model.generate_dungeon(room_max_size=8, room_min_size=4, max_rooms=20)
+            messagebox.showerror("Error", "Invalid grid scale."); return
+        self.model = MapModel(self.campaign_path, grid_scale=scale) # Generates a 50x50 map
+        self.model.generate_dungeon(room_max_size=12, room_min_size=5, max_rooms=30)
         self.view.map_name_entry.delete(0, 'end')
         self.view.map_name_entry.insert(0, "Generated Dungeon")
         self._redraw_all()
+        self.app_controller.set_dirty_flag()
 
     def save_map(self):
         map_name = self.view.map_name_entry.get()
@@ -189,41 +193,46 @@ class MapController:
         
         self.model.name = map_name
         try:
-            self.model.width = int(self.view.width_entry.get())
-            self.model.height = int(self.view.height_entry.get())
             self.model.grid_scale = float(self.view.scale_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid map dimensions or scale."); return
+            messagebox.showerror("Error", "Invalid grid scale."); return
 
         png_path = os.path.join(self.model.maps_dir, f"{map_name.lower().replace(' ', '_')}.png")
-        if not self.view.save_canvas_to_png(png_path):
+        if not self.view.save_canvas_to_png(png_path, self.model):
             messagebox.showerror("Error", "Failed to save map image."); return
             
+        self.save_token_positions()
+        self.refresh_map_list()
+
+    def save_token_positions(self):
+        if not self.model.name or self.model.name in ["New Blank Map", "New Custom Map"]:
+             messagebox.showwarning("Save Required", "Please save the main map background first before saving token positions.")
+             return
         try:
             self.model.save_map_data()
-            messagebox.showinfo("Success", f"Map '{map_name}' saved successfully.")
-            self.refresh_map_list()
+            self.app_controller.set_dirty_flag(False)
+            messagebox.showinfo("Success", f"Token positions for '{self.model.name}' saved.")
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save map data: {e}")
-            
+            messagebox.showerror("Error", f"Failed to save token data: {e}")
+
     def refresh_map_list(self):
-        maps = MapModel.get_all_maps()
+        maps = MapModel.get_all_maps(self.campaign_path)
         self.view.update_map_list(maps)
         
     def load_map_for_viewing(self, map_name):
-        loaded_model = MapModel.load(map_name)
+        loaded_model = MapModel.load(self.campaign_path, map_name)
         if loaded_model:
             self.model = loaded_model
             self.view.map_name_entry.delete(0, 'end')
             self.view.map_name_entry.insert(0, self.model.name)
             self.view.update_dimension_fields(self.model)
             self.set_tool("select")
-
+            
             png_path = os.path.join(self.model.maps_dir, f"{map_name.lower().replace(' ', '_')}.png")
             self.view.draw_editor_canvas(self.model, background_png_path=png_path)
-            
-            self.view.draw_static_background(map_name) # Draw the static background once
-            self._redraw_viewer_canvas() # Draw the dynamic tokens on top
+            self.view.draw_static_background(map_name, self.model)
+            self._redraw_viewer_canvas()
+            self.app_controller.set_dirty_flag(False)
         else:
             messagebox.showerror("Error", f"Could not load map data for '{map_name}'.")
 
@@ -235,3 +244,4 @@ class MapController:
             self.selected_tokens = []
             self._update_distance_display()
             self._redraw_viewer_canvas()
+            self.app_controller.set_dirty_flag()

@@ -1,43 +1,31 @@
 from tkinter import messagebox
 from .rules_model import RulesModel
-from .rules_view import RulesView
 
 class RulesController:
-    """Controller for the Rules feature."""
-    def __init__(self, app_controller, left_panel_frame, creation_tab_frame):
+    """
+    Controller for the Rules feature. 
+    It can act as a simple data provider for the main app,
+    or as a logic handler for the standalone editor window.
+    """
+    def __init__(self, app_controller):
         self.app_controller = app_controller
         self.model = RulesModel()
-        self.view = RulesView(left_panel_frame, creation_tab_frame)
-        self.selected_rule_set_name = None
-        self.view.setup_ui(self)
-        self.populate_rule_set_list()
-        
-    def populate_rule_set_list(self):
-        rule_sets = self.model.get_all_rule_sets()
-        self.view.populate_rule_set_list(rule_sets, self)
+        self.view = None # This will be set for the standalone editor
 
-    def on_rule_set_select(self, rule_set_name):
-        """Called when a rule set button is clicked."""
-        self.selected_rule_set_name = rule_set_name
-        self.view.highlight_selection(rule_set_name)
-
-    def load_selected_rule_set(self):
-        """Loads the rule set that has been selected via its button."""
-        rule_set_name = self.selected_rule_set_name
-        if not rule_set_name:
-            messagebox.showerror("Error", "Please select a rule set by clicking its name.")
-            return
-        
-        rule_set_data = self.model.load_rule_set(rule_set_name)
-        if rule_set_data:
-            self.view.update_status(rule_set_name)
-            self.app_controller.on_rule_set_loaded(rule_set_data)
-        else:
-            messagebox.showerror("Error", "Failed to load rule set.")
+    def set_view(self, view):
+        """Connects this controller to the standalone editor view."""
+        self.view = view
 
     def save_new_rule_set(self):
+        """Saves a new rule set. This is ONLY called from the standalone window."""
+        if not self.view:
+            print("Error: Save function called without a view.")
+            return
+
         name = self.view.rules_name_entry.get()
-        if not name: messagebox.showerror("Error", "Rule set name is required."); return
+        if not name:
+            messagebox.showerror("Error", "Rule set name is required.", parent=self.view)
+            return
         
         attrs = [attr.strip() for attr in self.view.rules_attrs_entry.get().split(',') if attr.strip()]
         skills_raw = self.view.rules_skills_text.get("1.0", "end").strip().split('\n')
@@ -46,5 +34,4 @@ class RulesController:
         formulas = {f.split(':')[0].strip(): f.split(':')[1].strip() for f in formulas_raw if ':' in f}
 
         self.model.save_rule_set(name, attrs, skills, formulas)
-        messagebox.showinfo("Success", f"Rule set '{name}' saved.")
-        self.populate_rule_set_list()
+        messagebox.showinfo("Success", f"Rule set '{name}' saved.", parent=self.view)
