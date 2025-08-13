@@ -1,10 +1,12 @@
 import json
 import os
+from utils import resource_path # Import the helper
 
 class RulesModel:
     """Model for managing TTRPG rule sets (loading, saving, listing)."""
-    def __init__(self, rules_dir='data/rule_sets'):
-        self.rules_dir = rules_dir
+    def __init__(self, rules_dir_name='data/rule_sets'):
+        # Use the helper to get the correct base directory
+        self.rules_dir = resource_path(rules_dir_name)
         if not os.path.exists(self.rules_dir):
             os.makedirs(self.rules_dir)
 

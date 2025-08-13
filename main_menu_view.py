@@ -2,6 +2,63 @@ import customtkinter as ctk
 import threading
 import queue
 
+class NewCampaignDialog(ctk.CTkToplevel):
+    def __init__(self, parent, rulesets):
+        super().__init__(parent)
+        self.title("New Campaign")
+        self.geometry("400x300")
+        self.resizable(False, False)
+        
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
+        
+        self.result = None
+        self.grid_columnconfigure(0, weight=1)
+
+        ctk.CTkLabel(self, text="Create New Campaign", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(20, 10))
+        
+        # Name Input
+        ctk.CTkLabel(self, text="Campaign Name:", anchor="w").pack(pady=(5, 0), padx=20, fill="x")
+        self.name_entry = ctk.CTkEntry(self, width=300)
+        self.name_entry.pack(pady=(0, 10), padx=20, fill="x")
+        
+        # Ruleset Selection
+        ctk.CTkLabel(self, text="Choose Rule Set:", anchor="w").pack(pady=(5, 0), padx=20, fill="x")
+        self.combobox = ctk.CTkComboBox(self, values=rulesets, state="readonly", width=300)
+        self.combobox.pack(pady=(0, 10), padx=20, fill="x")
+        if rulesets:
+            self.combobox.set(rulesets[0])
+        
+        # Buttons
+        button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame.pack(pady=20)
+        ctk.CTkButton(button_frame, text="Create Campaign", command=self._on_ok).pack(side="left", padx=10)
+        ctk.CTkButton(button_frame, text="Cancel", command=self._on_close).pack(side="left", padx=10)
+
+        self.transient(parent) # Set as modal
+        self.grab_set()
+        self.wait_window(self)
+
+    def _on_close(self):
+        self.grab_release()
+        self.destroy()
+
+    def _on_ok(self):
+        campaign_name = self.name_entry.get().strip()
+        ruleset_name = self.combobox.get()
+        
+        if not campaign_name or not ruleset_name or ruleset_name == "No rule sets found":
+            self.result = None
+            self._on_close()
+            return
+            
+        self.result = (campaign_name, ruleset_name)
+        self._on_close()
+
+    def get_input(self):
+        return self.result
+
+
+
 class MainMenuView(ctk.CTkFrame):
     """The UI for the main menu screen, featuring a clean vertical layout."""
     def __init__(self, parent, controller):
@@ -72,6 +129,8 @@ class LoadGameWindow(ctk.CTkToplevel):
         self.geometry("400x500")
         self.resizable(False, False)
         
+        self.protocol("WM_DELETE_WINDOW", self._on_close) # Handle 'X' button
+        
         self.grid_columnconfigure(0, weight=1)
         self.grid_rowconfigure(1, weight=1)
 
@@ -85,33 +144,28 @@ class LoadGameWindow(ctk.CTkToplevel):
 
         ctk.CTkButton(self, text="Load Selected", command=self._load_and_close).grid(row=2, column=0, pady=10)
 
-        # --- THE FIX: Asynchronous Loading ---
         self.campaign_queue = queue.Queue()
-        # 1. Start a background thread to do the slow disk I/O
         self.worker_thread = threading.Thread(target=self._fetch_campaigns_worker, daemon=True)
         self.worker_thread.start()
-        # 2. Start a polling loop on the main GUI thread to check for results
         self.after(100, self._process_queue)
 
     def _fetch_campaigns_worker(self):
-        """(Runs on a background thread) Fetches the list of campaigns and puts it in the queue."""
+        """(Runs on a background thread) Fetches the list of campaigns."""
         campaigns = self.controller.campaign_model.list_campaigns()
         self.campaign_queue.put(campaigns)
 
     def _process_queue(self):
-        """(Runs on the main GUI thread) Checks the queue for data from the worker thread."""
+        """(Runs on the main GUI thread) Checks for results from the worker thread."""
         try:
             campaigns = self.campaign_queue.get_nowait()
-            # If we got data, update the UI with it
             self._populate_list_ui(campaigns)
         except queue.Empty:
-            # If no data yet, check again in 100ms
-            if self.winfo_exists(): # Only continue polling if the window is still open
+            if self.winfo_exists():
                 self.after(100, self._process_queue)
 
     def _populate_list_ui(self, campaigns):
         """(Runs on the main GUI thread) Clears old widgets and builds the button list."""
-        self.loading_label.destroy() # Remove "Loading..." message
+        self.loading_label.destroy()
         for btn in self.campaign_buttons:
             btn.destroy()
         self.campaign_buttons.clear()
@@ -135,9 +189,15 @@ class LoadGameWindow(ctk.CTkToplevel):
             else:
                 btn.configure(fg_color="transparent", border_color="gray50")
     
-    def _load_and_close(self):
-        campaign_to_load = self.selected_campaign
+    def _on_close(self):
+        """Ensures the grab is released before destroying the window."""
+        self.grab_release()
         self.destroy()
+
+    def _load_and_close(self):
+        """Schedules the loading operation and safely closes the pop-up."""
+        campaign_to_load = self.selected_campaign
+        self._on_close() # Use the safe closing method
         if campaign_to_load:
             self.controller.root.after(50, lambda: self.controller.load_game_flow(campaign_to_load))
 
@@ -148,6 +208,8 @@ class RulesetSelectionDialog(ctk.CTkToplevel):
         self.title(title)
         self.geometry("400x200")
         self.resizable(False, False)
+        
+        self.protocol("WM_DELETE_WINDOW", self._on_close) # Handle 'X' button
         
         self.selection = None
         self.grid_columnconfigure(0, weight=1)
@@ -160,13 +222,20 @@ class RulesetSelectionDialog(ctk.CTkToplevel):
             self.combobox.set(values[0])
 
         ctk.CTkButton(self, text="Confirm", command=self._on_ok).pack(pady=20)
+
         self.transient(parent)
         self.grab_set()
         self.wait_window(self)
 
-    def _on_ok(self, event=None):
-        self.selection = self.combobox.get()
+    def _on_close(self):
+        """Ensures the grab is released before destroying the window."""
+        self.grab_release()
         self.destroy()
+
+    def _on_ok(self, event=None):
+        """Saves the selection and closes the dialog."""
+        self.selection = self.combobox.get()
+        self._on_close()
 
     def get_selection(self):
         return self.selection

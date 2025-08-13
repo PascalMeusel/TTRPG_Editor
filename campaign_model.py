@@ -1,10 +1,12 @@
 import os
 import json
+from utils import resource_path # Import the helper
 
 class CampaignModel:
     """Manages the creation and listing of campaign save files."""
-    def __init__(self, base_dir="data/campaigns"):
-        self.base_dir = base_dir
+    def __init__(self, base_dir_name="data/campaigns"):
+        # Use the helper to get the correct base directory
+        self.base_dir = resource_path(base_dir_name)
         if not os.path.exists(self.base_dir):
             os.makedirs(self.base_dir)
 

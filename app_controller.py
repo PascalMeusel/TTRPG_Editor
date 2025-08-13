@@ -10,7 +10,7 @@ from music.music_controller import MusicController
 from map.map_controller import MapController
 
 from campaign_model import CampaignModel
-from main_menu_view import MainMenuView
+from main_menu_view import MainMenuView, NewCampaignDialog # Import NewCampaignDialog
 from rules.rules_editor_window import RulesEditorWindow
 from rules.rules_model import RulesModel
 
@@ -178,25 +178,31 @@ class AppController:
             
     def new_game_flow(self):
         """A new game always requires a fresh editor session."""
-        # --- FIX: Clean up any existing session before creating a new one ---
-        self._cleanup_editor_session()
-
-        campaign_name = ctk.CTkInputDialog(text="Enter a name for your new campaign:", title="New Campaign").get_input()
-        if not campaign_name: return
-
+        
+        # 1. Get available rulesets
         rules_model = RulesModel()
         rulesets = rules_model.get_all_rule_sets()
         
         if not rulesets:
             messagebox.showerror("Error", "No rule sets found. Please create a rule set first.")
             return
-        
-        dialog = RulesetSelectionDialog(parent=self.root, title="Choose Rule Set", 
-                                          text="Choose a rule set for this campaign:", values=rulesets)
-        ruleset_name = dialog.get_selection()
-        if not ruleset_name: return
 
+        # 2. Open the new, combined dialog for name and ruleset
+        dialog = NewCampaignDialog(parent=self.root, rulesets=rulesets)
+        result = dialog.get_input()
+
+        if not result:
+            # User canceled or provided invalid input
+            return
+
+        campaign_name, ruleset_name = result
+
+        # --- FIX: Clean up any existing session before creating a new one ---
+        self._cleanup_editor_session()
+
+        # 3. Create the campaign
         path = self.campaign_model.create_campaign(campaign_name, ruleset_name)
+        
         if path:
             self.current_campaign_path = path
             self._show_editor()

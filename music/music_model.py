@@ -1,5 +1,6 @@
 import os
 import shutil
+from utils import resource_path # Import the helper
 try:
     import pygame
 except ImportError:
@@ -8,8 +9,9 @@ except ImportError:
 
 class MusicModel:
     """Model for handling audio playback and file management."""
-    def __init__(self, music_dir='assets/music'):
-        self.music_dir = music_dir
+    def __init__(self, music_dir_name='assets/music'):
+        # Use the helper to get the correct base directory
+        self.music_dir = resource_path(music_dir_name)
         if not os.path.exists(self.music_dir):
             os.makedirs(self.music_dir)
         if pygame:

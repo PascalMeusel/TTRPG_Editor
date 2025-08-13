@@ -7,6 +7,11 @@ if __name__ == "__main__":
 
     root = ctk.CTk()
     root.title("TTRPG Campaign Editor")
+
+    # --- FIX: Set the window to start in fullscreen mode ---
+    root.attributes('-fullscreen', True)
+    
+    # These are still good to have as fallbacks if the user exits fullscreen
     root.geometry("1200x800")
     root.minsize(1000, 700)
 
