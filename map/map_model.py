@@ -2,17 +2,16 @@ import json
 import os
 import random
 import math
-from PIL import Image, ImageDraw
 
 class MapModel:
-    """Manages all data for a map, including elements, tokens, and scale."""
+    """Manages map data, focusing on metadata and tokens. The visual background is handled as an image."""
     def __init__(self, name="New Map", width=80, height=60, grid_size=20, grid_scale=1.5):
         self.name = name
         self.width = width
         self.height = height
         self.grid_size = grid_size
-        self.grid_scale = grid_scale # Meters per grid square
-        self.map_elements = []
+        self.grid_scale = grid_scale
+        self.map_elements = [] # This is now transient data for the editor session
         self.tokens = []
         self.maps_dir = "data/maps"
         if not os.path.exists(self.maps_dir):
@@ -22,20 +21,17 @@ class MapModel:
         """Resets the map elements and tokens to a blank state."""
         self.map_elements = []
         self.tokens = []
-        # Add a default background based on the model's dimensions
         self.add_element({'type': 'rect', 'coords': (0, 0, self.width, self.height), 'color': '#2B2B2B'})
 
     def add_element(self, element):
         self.map_elements.append(element)
 
     def add_token(self, name, token_type, x, y):
-        if any(t['name'] == name for t in self.tokens):
-            return False
+        if any(t['name'] == name for t in self.tokens): return False
         self.tokens.append({'name': name, 'type': token_type, 'x': x, 'y': y})
         return True
 
     def delete_token(self, token_name):
-        """Removes a token from the map by its name."""
         self.tokens = [t for t in self.tokens if t.get('name') != token_name]
 
     def move_token(self, token_name, new_x, new_y):
@@ -47,22 +43,18 @@ class MapModel:
         return False
         
     def get_token_at(self, x, y):
-        """Finds the top-most token at a given grid coordinate."""
         for token in reversed(self.tokens):
-            dist = math.sqrt((x - token['x'])**2 + (y - token['y'])**2)
-            if dist < 0.5: # Click is within the token's grid cell
+            if math.sqrt((x - token['x'])**2 + (y - token['y'])**2) < 0.5:
                 return token
         return None
 
     def calculate_distance(self, token1, token2):
-        """Calculates grid distance between the centers of two tokens."""
-        dist = math.sqrt((token1['x'] - token2['x'])**2 + (token1['y'] - token2['y'])**2)
-        return dist
+        return math.sqrt((token1['x'] - token2['x'])**2 + (token1['y'] - token2['y'])**2)
         
     def generate_dungeon(self, room_max_size, room_min_size, max_rooms):
-        """A simple dungeon generation algorithm."""
         self.clear_map()
         rooms = []
+        # ... (generation logic remains the same) ...
         for _ in range(max_rooms):
             w = random.randint(room_min_size, room_max_size)
             h = random.randint(room_min_size, room_max_size)
@@ -87,46 +79,34 @@ class MapModel:
         return (room1['x1'] <= room2['x2'] and room1['x2'] >= room2['x1'] and
                 room1['y1'] <= room2['y2'] and room1['y2'] >= room2['y1'])
 
-    def save_map(self):
-        """Saves all map data to a JSON file and renders the background to a PNG."""
+    def save_map_data(self):
+        """Saves only metadata and tokens to a lightweight JSON file."""
         json_path = os.path.join(self.maps_dir, f"{self.name.lower().replace(' ', '_')}.json")
         map_data = {
             'name': self.name, 'width': self.width, 'height': self.height, 
             'grid_size': self.grid_size, 'grid_scale': self.grid_scale,
-            'elements': self.map_elements, 'tokens': self.tokens
+            'tokens': self.tokens
+            # 'elements' list is NOT saved anymore
         }
         with open(json_path, 'w') as f:
             json.dump(map_data, f, indent=4)
-        self.render_background_to_png()
-
-    def render_background_to_png(self):
-        """Renders ONLY the map background elements to a PNG file."""
-        png_path = os.path.join(self.maps_dir, f"{self.name.lower().replace(' ', '_')}.png")
-        img_width, img_height = self.width * self.grid_size, self.height * self.grid_size
-        image = Image.new('RGB', (img_width, img_height), '#000000')
-        draw = ImageDraw.Draw(image)
-        for elem in self.map_elements:
-            coords = tuple(c * self.grid_size for c in elem['coords'])
-            if elem['type'] == 'rect': draw.rectangle(coords, fill=elem['color'])
-        image.save(png_path)
 
     @classmethod
     def load(cls, map_name, maps_dir="data/maps"):
-        """Loads a map's data from a JSON file and returns a new MapModel instance."""
+        """Loads metadata and tokens from a JSON file."""
         json_path = os.path.join(maps_dir, f"{map_name.lower().replace(' ', '_')}.json")
         if not os.path.exists(json_path): return None
         with open(json_path, 'r') as f:
             data = json.load(f)
             map_instance = cls(
                 data['name'], data['width'], data['height'], 
-                data['grid_size'], data.get('grid_scale', 1.5) # Default to 1.5 for older maps
+                data['grid_size'], data.get('grid_scale', 1.5)
             )
-            map_instance.map_elements = data.get('elements', [])
+            # The loaded instance will have an empty map_elements list, which is correct.
+            # The visual background will be loaded from the PNG in the view.
             map_instance.tokens = data.get('tokens', [])
             return map_instance
 
     @staticmethod
     def get_all_maps(maps_dir="data/maps"):
-        """Returns a sorted list of all map names found in the data directory."""
-        if not os.path.exists(maps_dir): return []
         return sorted([f.replace('.json', '').replace('_', ' ').title() for f in os.listdir(maps_dir) if f.endswith('.json')])

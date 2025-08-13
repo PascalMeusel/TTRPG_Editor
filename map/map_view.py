@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from PIL import Image, ImageTk
+from PIL import Image, ImageTk, ImageGrab
 import os
 
 class MapView:
@@ -8,6 +8,7 @@ class MapView:
         self.editor_tab = editor_tab
         self.viewer_tab = viewer_tab
         self.map_photo_image = None
+        self.editor_bg_image = None # Separate reference for editor background
         self.PC_COLOR = "#00BFFF"
         self.NPC_COLOR = "#DC143C"
 
@@ -17,6 +18,8 @@ class MapView:
         self.editor_tab.grid_rowconfigure(0, weight=1)
         toolbar = ctk.CTkFrame(self.editor_tab, width=200)
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
+        
+        # --- Map Creation ---
         ctk.CTkLabel(toolbar, text="Map Setup", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
         dims_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
         dims_frame.pack(fill="x", padx=10)
@@ -34,18 +37,25 @@ class MapView:
         self.scale_entry.grid(row=3, column=0, padx=(0,2))
         self.scale_entry.insert(0, "1.5")
         ctk.CTkButton(toolbar, text="New Blank Map", command=controller.new_map).pack(pady=(10,5), padx=10, fill="x")
+        
+        # --- Drawing Tools ---
         ctk.CTkLabel(toolbar, text="Drawing Tools", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
         ctk.CTkButton(toolbar, text="Brush", command=lambda: controller.set_tool("brush")).pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Rectangle", command=lambda: controller.set_tool("rect")).pack(pady=5, padx=10, fill="x")
         self.color_var = ctk.StringVar(value="#999999")
         colors = {"Stone": "#999999", "Grass": "#6B8E23", "Water": "#4682B4", "Wood": "#8B4513"}
         for name, code in colors.items(): ctk.CTkRadioButton(toolbar, text=name, variable=self.color_var, value=code).pack(anchor="w", padx=20, pady=2)
+        
+        # --- Generator ---
         ctk.CTkLabel(toolbar, text="Generator", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
         ctk.CTkButton(toolbar, text="Generate Dungeon", command=controller.generate_dungeon).pack(pady=5, padx=10, fill="x")
+        
+        # --- Saving ---
         ctk.CTkLabel(toolbar, text="Map Name").pack(pady=(20, 5))
         self.map_name_entry = ctk.CTkEntry(toolbar)
         self.map_name_entry.pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Save Map Background", command=controller.save_map).pack(pady=10, padx=10, fill="x")
+        
         canvas_frame = ctk.CTkFrame(self.editor_tab)
         canvas_frame.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         self.editor_canvas = ctk.CTkCanvas(canvas_frame, bg="#2B2B2B", highlightthickness=0)
@@ -86,70 +96,69 @@ class MapView:
         self.viewer_canvas.bind("<ButtonRelease-1>", controller.on_viewer_canvas_release)
         self.viewer_canvas.bind("<Control-Button-1>", controller.on_viewer_canvas_ctrl_press)
 
-    def draw_editor_canvas(self, map_model):
-        """Draws the static background elements on the editor canvas."""
+    def save_canvas_to_png(self, filepath):
+        """Saves the current state of the editor canvas to a PNG file."""
+        try:
+            x = self.editor_canvas.winfo_rootx()
+            y = self.editor_canvas.winfo_rooty()
+            width = self.editor_canvas.winfo_width()
+            height = self.editor_canvas.winfo_height()
+            img = ImageGrab.grab(bbox=(x, y, x + width, y + height))
+            img.save(filepath)
+            return True
+        except Exception as e:
+            print(f"Error saving canvas to PNG: {e}")
+            return False
+
+    def draw_editor_canvas(self, map_model, background_png_path=None):
+        """Draws the editor canvas. If a path is provided, it uses it as a background."""
         self.editor_canvas.delete("all")
-        grid_size = map_model.grid_size
-        for elem in map_model.map_elements:
-            coords = tuple(c * grid_size for c in elem['coords'])
-            self.editor_canvas.create_rectangle(coords, fill=elem['color'], outline="")
+        if background_png_path and os.path.exists(background_png_path):
+            img = Image.open(background_png_path)
+            self.editor_bg_image = ImageTk.PhotoImage(img)
+            self.editor_canvas.create_image(0, 0, anchor="nw", image=self.editor_bg_image, tags="background")
+        else:
+            grid_size = map_model.grid_size
+            for elem in map_model.map_elements:
+                coords = tuple(c * grid_size for c in elem['coords'])
+                self.editor_canvas.create_rectangle(coords, fill=elem['color'], outline="")
 
     def draw_viewer_canvas(self, map_model, controller):
-        """
-        --- OPTIMIZATION: Main rendering loop for the live map. ---
-        This function now ONLY redraws dynamic elements (tokens and overlays).
-        The static background is drawn separately and only when a map is loaded.
-        """
-        # Delete only the dynamic elements by their tags
-        self.viewer_canvas.delete("token")
-        self.viewer_canvas.delete("overlay")
-        
+        """Draws dynamic elements (tokens, overlays) on the viewer canvas."""
+        self.viewer_canvas.delete("token", "overlay")
         grid_size = map_model.grid_size
-        
-        # Draw all tokens EXCEPT the one being dragged
         for token in map_model.tokens:
             if token is not controller.token_being_dragged:
                 self._draw_token(self.viewer_canvas, token, grid_size)
-
-        # Draw the dragged token at its temporary preview position
         if controller.token_being_dragged and controller.drag_preview_pos:
             self._draw_token(self.viewer_canvas, controller.token_being_dragged, grid_size, preview_pos=controller.drag_preview_pos)
-        
-        # Draw the selection overlays
         self._draw_selection_overlay(map_model, controller)
 
     def _draw_token(self, canvas, token_data, grid_size, preview_pos=None):
-        """Helper to draw a single token. Uses pixel-based preview_pos if provided."""
+        """Helper to draw a single token."""
         color = self.PC_COLOR if token_data['type'] == 'PC' else self.NPC_COLOR
         center_x, center_y = preview_pos or ((token_data['x'] + 0.5) * grid_size, (token_data['y'] + 0.5) * grid_size)
         radius = grid_size * 0.4
-        
-        # Add the 'token' tag to all token elements for easy deletion
         canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, fill=color, outline="white", width=1, tags="token")
         canvas.create_text(center_x, center_y, text=token_data['name'][0], fill="white", font=("Arial", 10, "bold"), tags="token")
 
     def _draw_selection_overlay(self, map_model, controller):
-        """Draws dynamic overlays like movement circles and distance lines."""
+        """Draws overlays like movement circles and distance lines."""
         if not controller.selected_tokens: return
         grid_size = map_model.grid_size
-        
         if len(controller.selected_tokens) == 1:
             token = controller.selected_tokens[0]
             try: move_dist = float(self.movement_entry.get() or 0)
             except ValueError: move_dist = 0
-            
             if move_dist > 0:
                 start_pos = controller.drag_start_pos.get(token['name'], (token['x'], token['y']))
                 radius = (move_dist / map_model.grid_scale) * grid_size
                 center_x, center_y = (start_pos[0] + 0.5) * grid_size, (start_pos[1] + 0.5) * grid_size
-                # Add the 'overlay' tag for easy deletion
                 self.viewer_canvas.create_oval(center_x - radius, center_y - radius, center_x + radius, center_y + radius, outline="yellow", dash=(4, 4), width=2, tags="overlay")
-        
         elif len(controller.selected_tokens) == 2:
             t1, t2 = controller.selected_tokens[0], controller.selected_tokens[1]
             x1, y1 = (t1['x'] + 0.5) * grid_size, (t1['y'] + 0.5) * grid_size
             x2, y2 = (t2['x'] + 0.5) * grid_size, (t2['y'] + 0.5) * grid_size
-            # Add the 'overlay' tag for easy deletion
             self.viewer_canvas.create_line(x1, y1, x2, y2, fill="yellow", width=2, dash=(4, 4), tags="overlay")
 
     def update_token_placer_list(self, tokens):
@@ -162,19 +171,14 @@ class MapView:
         if not maps: self.map_selection_list.set("")
 
     def draw_static_background(self, map_name):
-        """
-        --- OPTIMIZATION: New method to draw the static background image ONCE. ---
-        This is called only when a map is loaded, not during drags.
-        """
-        self.viewer_canvas.delete("all") # Clear everything first
+        """Draws the static background image on the viewer canvas."""
+        self.viewer_canvas.delete("all")
         if not map_name: return
-
         png_path = os.path.join("data/maps", f"{map_name.lower().replace(' ', '_')}.png")
         if os.path.exists(png_path):
             try:
                 img = Image.open(png_path)
                 self.map_photo_image = ImageTk.PhotoImage(img)
-                # Add the 'background' tag so it's not deleted with other items
                 self.viewer_canvas.create_image(0, 0, anchor="nw", image=self.map_photo_image, tags="background")
             except Exception as e:
                 print(f"Error loading map image: {e}")

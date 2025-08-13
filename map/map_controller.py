@@ -2,6 +2,7 @@ from tkinter import messagebox
 from .map_model import MapModel
 from .map_view import MapView
 import math
+import os
 
 class MapController:
     """Controller for all map interactions."""
@@ -164,9 +165,7 @@ class MapController:
         self.view.draw_editor_canvas(self.model)
         self.view.draw_viewer_canvas(self.model, self)
 
-    # --- FIX: This helper method was missing. ---
     def _redraw_viewer_canvas(self):
-        """Helper method to specifically redraw the viewer canvas."""
         self.view.draw_viewer_canvas(self.model, self)
 
     def generate_dungeon(self):
@@ -187,12 +186,25 @@ class MapController:
     def save_map(self):
         map_name = self.view.map_name_entry.get()
         if not map_name: messagebox.showerror("Error", "Please enter a name for the map."); return
+        
         self.model.name = map_name
         try:
-            self.model.save_map()
+            self.model.width = int(self.view.width_entry.get())
+            self.model.height = int(self.view.height_entry.get())
+            self.model.grid_scale = float(self.view.scale_entry.get())
+        except ValueError:
+            messagebox.showerror("Error", "Invalid map dimensions or scale."); return
+
+        png_path = os.path.join(self.model.maps_dir, f"{map_name.lower().replace(' ', '_')}.png")
+        if not self.view.save_canvas_to_png(png_path):
+            messagebox.showerror("Error", "Failed to save map image."); return
+            
+        try:
+            self.model.save_map_data()
             messagebox.showinfo("Success", f"Map '{map_name}' saved successfully.")
             self.refresh_map_list()
-        except Exception as e: messagebox.showerror("Error", f"Failed to save map: {e}")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to save map data: {e}")
             
     def refresh_map_list(self):
         maps = MapModel.get_all_maps()
@@ -206,7 +218,12 @@ class MapController:
             self.view.map_name_entry.insert(0, self.model.name)
             self.view.update_dimension_fields(self.model)
             self.set_tool("select")
-            self._redraw_all()
+
+            png_path = os.path.join(self.model.maps_dir, f"{map_name.lower().replace(' ', '_')}.png")
+            self.view.draw_editor_canvas(self.model, background_png_path=png_path)
+            
+            self.view.draw_static_background(map_name) # Draw the static background once
+            self._redraw_viewer_canvas() # Draw the dynamic tokens on top
         else:
             messagebox.showerror("Error", f"Could not load map data for '{map_name}'.")
 
