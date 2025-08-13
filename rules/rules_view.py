@@ -13,7 +13,6 @@ class RulesView:
         
         ctk.CTkLabel(rules_frame, text="Game Rule Sets", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=(10, 0))
         
-        # --- NEW: Status Label for the current rule set ---
         status_frame = ctk.CTkFrame(rules_frame, fg_color="transparent")
         status_frame.pack(fill="x", padx=10, pady=(0, 5))
         ctk.CTkLabel(status_frame, text="Current:", font=ctk.CTkFont(size=12, weight="normal")).pack(side="left")
@@ -26,27 +25,38 @@ class RulesView:
         ctk.CTkButton(rules_frame, text="Load Selected Rule Set", command=controller.load_selected_rule_set).pack(pady=10)
         
         # --- Setup Right Panel (Creation Tab) ---
+        # --- FIX: Build the entire tab UI in a container first for smoothness ---
         tab = self.creation_tab_frame
-        tab.grid_columnconfigure((0,1), weight=1)
-        tab.grid_rowconfigure(4, weight=1) # Adjusted row configuration
-        ctk.CTkLabel(tab, text="Create a New Rule Set", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, columnspan=2, padx=20, pady=20)
-        ctk.CTkLabel(tab, text="Rule Set Name:", anchor="w").grid(row=1, column=0, columnspan=2, padx=20, sticky="w")
-        self.rules_name_entry = ctk.CTkEntry(tab)
+        container = ctk.CTkFrame(tab, fg_color="transparent")
+        container.grid_columnconfigure((0,1), weight=1)
+        container.grid_rowconfigure(4, weight=1)
+        
+        ctk.CTkLabel(container, text="Create a New Rule Set", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, columnspan=2, padx=20, pady=20)
+        
+        ctk.CTkLabel(container, text="Rule Set Name:", anchor="w").grid(row=1, column=0, columnspan=2, padx=20, sticky="w")
+        self.rules_name_entry = ctk.CTkEntry(container)
         self.rules_name_entry.grid(row=1, column=0, columnspan=2, padx=20, pady=(0,10), sticky="ew")
-        ctk.CTkLabel(tab, text="Attributes (comma-separated):", anchor="w").grid(row=2, column=0, columnspan=2, padx=20, sticky="w")
-        self.rules_attrs_entry = ctk.CTkEntry(tab)
+        
+        ctk.CTkLabel(container, text="Attributes (comma-separated):", anchor="w").grid(row=2, column=0, columnspan=2, padx=20, sticky="w")
+        self.rules_attrs_entry = ctk.CTkEntry(container)
         self.rules_attrs_entry.grid(row=2, column=0, columnspan=2, padx=20, pady=(0,10), sticky="ew")
         self.rules_attrs_entry.insert(0, "Strength, Dexterity, Hit Points")
-        ctk.CTkLabel(tab, text="Skills (Skill:Attribute, one per line):", anchor="w").grid(row=3, column=0, padx=(20,10), sticky="w")
-        self.rules_skills_text = ctk.CTkTextbox(tab)
+        
+        ctk.CTkLabel(container, text="Skills (Skill:Attribute, one per line):", anchor="w").grid(row=3, column=0, padx=(20,10), sticky="w")
+        self.rules_skills_text = ctk.CTkTextbox(container)
         self.rules_skills_text.grid(row=4, column=0, padx=(20,10), pady=(0,10), sticky="nsew")
         self.rules_skills_text.insert("1.0", "Athletics:Strength\nStealth:Dexterity")
-        ctk.CTkLabel(tab, text="Formulas (Name:Formula, one per line):", anchor="w").grid(row=3, column=1, padx=(10,20), sticky="w")
-        self.rules_formulas_text = ctk.CTkTextbox(tab)
+        
+        ctk.CTkLabel(container, text="Formulas (Name:Formula, one per line):", anchor="w").grid(row=3, column=1, padx=(10,20), sticky="w")
+        self.rules_formulas_text = ctk.CTkTextbox(container)
         self.rules_formulas_text.grid(row=4, column=1, padx=(10,20), pady=(0,10), sticky="nsew")
         self.rules_formulas_text.insert("1.0", "Dodge Chance:Dexterity * 2 + 10")
-        ctk.CTkButton(tab, text="Save Rule Set", command=controller.save_new_rule_set).grid(row=5, column=0, columnspan=2, pady=20)
         
+        ctk.CTkButton(container, text="Save Rule Set", command=controller.save_new_rule_set).grid(row=5, column=0, columnspan=2, pady=20)
+        
+        # --- FIX: Pack the finished container to display it all at once ---
+        container.pack(fill="both", expand=True)
+
     def populate_rule_set_list(self, rule_sets):
         self.rule_set_listbox.configure(state="normal")
         self.rule_set_listbox.delete("1.0", "end")

@@ -68,25 +68,35 @@ class NpcView:
         self.sheet_content_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
 
     def build_dynamic_fields(self, rule_set):
-        for widget in self.npc_creator_fields_frame.winfo_children(): widget.destroy()
+        """Builds stat fields in a hidden container first for smooth rendering."""
+        for widget in self.npc_creator_fields_frame.winfo_children():
+            widget.destroy()
         self.npc_creator_entries.clear()
-        ctk.CTkLabel(self.npc_creator_fields_frame, text="Attributes", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
+
+        # --- FIX: Build in a temporary container ---
+        container = ctk.CTkFrame(self.npc_creator_fields_frame, fg_color="transparent")
+        
+        ctk.CTkLabel(container, text="Attributes", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
         for attr in rule_set['attributes']:
-            frame = ctk.CTkFrame(self.npc_creator_fields_frame, fg_color="transparent")
+            frame = ctk.CTkFrame(container, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
             ctk.CTkLabel(frame, text=attr, width=150, anchor="w").pack(side="left")
             entry = ctk.CTkEntry(frame)
             entry.pack(side="left", fill="x", expand=True)
             self.npc_creator_entries[attr] = entry
-        ctk.CTkLabel(self.npc_creator_fields_frame, text="Skills", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
+            
+        ctk.CTkLabel(container, text="Skills", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
         for skill, base_attr in rule_set['skills'].items():
-            frame = ctk.CTkFrame(self.npc_creator_fields_frame, fg_color="transparent")
+            frame = ctk.CTkFrame(container, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
             label = f"{skill} ({base_attr[:3]})"
             ctk.CTkLabel(frame, text=label, width=150, anchor="w").pack(side="left")
             entry = ctk.CTkEntry(frame)
             entry.pack(side="left", fill="x", expand=True)
             self.npc_creator_entries[skill] = entry
+            
+        # --- FIX: Show the container all at once ---
+        container.pack(fill="both", expand=True)
 
     def update_npc_management_list(self, npcs):
         self.npc_management_list.configure(state="normal")
@@ -106,32 +116,34 @@ class NpcView:
         self.npc_management_list.tag_config("selected", background="#343638", foreground="#DCE4EE")
 
     def clear_sheet(self):
-        for widget in self.sheet_content_frame.winfo_children(): widget.destroy()
+        for widget in self.sheet_content_frame.winfo_children():
+            widget.destroy()
 
     def display_sheet_data(self, npc, controller):
-        """Populates the NPC sheet with the loaded NPC's data."""
+        """Populates the NPC sheet UI in a hidden container for smooth rendering."""
         self.clear_sheet()
-        self.sheet_content_frame.grid_columnconfigure(0, weight=1)
-        self.sheet_content_frame.grid_rowconfigure(1, weight=1)
+        self.npc_sheet_entries.clear()
 
-        ctk.CTkLabel(self.sheet_content_frame, text=npc.name, font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, pady=5)
+        # --- FIX: Build all widgets in this temporary wrapper first ---
+        content_wrapper = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
+        content_wrapper.grid_columnconfigure(0, weight=1)
+        content_wrapper.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(content_wrapper, text=npc.name, font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, pady=5)
         
-        sheet_pane = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
+        sheet_pane = ctk.CTkFrame(content_wrapper, fg_color="transparent")
         sheet_pane.grid(row=1, column=0, pady=10, sticky="nsew")
         sheet_pane.grid_columnconfigure(0, weight=1)
         sheet_pane.grid_rowconfigure(0, weight=1)
         
-        # Left side for stats
         stats_frame = ctk.CTkScrollableFrame(sheet_pane, label_text="Stats & Skills")
         stats_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         
-        # Right side for GM notes and loot
         gm_pane = ctk.CTkFrame(sheet_pane, fg_color="transparent")
         gm_pane.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-        gm_pane.grid_rowconfigure(1, weight=1) # Notes textbox
-        gm_pane.grid_rowconfigure(3, weight=1) # Loot textbox
+        gm_pane.grid_rowconfigure(1, weight=1)
+        gm_pane.grid_rowconfigure(3, weight=1)
         
-        self.npc_sheet_entries.clear()
         for key, value in {**npc.attributes, **npc.skills}.items():
             frame = ctk.CTkFrame(stats_frame, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
@@ -151,7 +163,10 @@ class NpcView:
         self.sheet_loot_text.grid(row=3, column=0, sticky="nsew")
         self.sheet_loot_text.insert("1.0", "\n".join(npc.loot))
 
-        button_frame = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
+        button_frame = ctk.CTkFrame(content_wrapper, fg_color="transparent")
         button_frame.grid(row=2, column=0, pady=20)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_npc_sheet).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Delete NPC", command=controller.delete_current_npc, fg_color="#D2691E", hover_color="#B2590E").pack(side="left", padx=10)
+
+        # --- FIX: Make the fully built UI visible all at once ---
+        content_wrapper.pack(fill="both", expand=True)

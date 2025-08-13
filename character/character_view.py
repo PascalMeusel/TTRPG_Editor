@@ -36,25 +36,37 @@ class CharacterView:
         self.sheet_content_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
         
     def build_dynamic_fields(self, rule_set):
-        for widget in self.char_creator_fields_frame.winfo_children(): widget.destroy()
+        """Builds stat fields in a hidden container first for smooth rendering."""
+        # Clear old widgets
+        for widget in self.char_creator_fields_frame.winfo_children():
+            widget.destroy()
         self.char_creator_entries.clear()
-        ctk.CTkLabel(self.char_creator_fields_frame, text="Attributes", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
+
+        # --- FIX: Build in a temporary container ---
+        container = ctk.CTkFrame(self.char_creator_fields_frame, fg_color="transparent")
+
+        ctk.CTkLabel(container, text="Attributes", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
         for attr in rule_set['attributes']:
-            frame = ctk.CTkFrame(self.char_creator_fields_frame, fg_color="transparent")
+            frame = ctk.CTkFrame(container, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
             ctk.CTkLabel(frame, text=attr, width=150, anchor="w").pack(side="left")
             entry = ctk.CTkEntry(frame)
             entry.pack(side="left", fill="x", expand=True)
             self.char_creator_entries[attr] = entry
-        ctk.CTkLabel(self.char_creator_fields_frame, text="Skills", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
+            
+        ctk.CTkLabel(container, text="Skills", font=ctk.CTkFont(size=14, weight="bold")).pack(anchor="w", pady=(10,5), padx=5)
         for skill, base_attr in rule_set['skills'].items():
-            frame = ctk.CTkFrame(self.char_creator_fields_frame, fg_color="transparent")
+            frame = ctk.CTkFrame(container, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
             label = f"{skill} ({base_attr[:3]})"
             ctk.CTkLabel(frame, text=label, width=150, anchor="w").pack(side="left")
             entry = ctk.CTkEntry(frame)
             entry.pack(side="left", fill="x", expand=True)
             self.char_creator_entries[skill] = entry
+            
+        # --- FIX: Show the container all at once ---
+        container.pack(fill="both", expand=True)
+
 
     def update_character_list(self, characters):
         characters = characters or ["-"]
@@ -62,22 +74,32 @@ class CharacterView:
         self.char_sheet_list.set(characters[0])
 
     def clear_sheet(self):
-        for widget in self.sheet_content_frame.winfo_children(): widget.destroy()
+        for widget in self.sheet_content_frame.winfo_children():
+            widget.destroy()
 
     def display_sheet_data(self, character, controller):
+        """Builds the character sheet UI in a hidden container for smooth rendering."""
         self.clear_sheet()
-        self.sheet_content_frame.grid_columnconfigure(0, weight=1)
-        self.sheet_content_frame.grid_rowconfigure(1, weight=1)
-        ctk.CTkLabel(self.sheet_content_frame, text=character.name, font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, pady=5)
-        sheet_pane = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
+        self.char_sheet_entries.clear()
+        
+        # --- FIX: Build all widgets in this temporary wrapper first ---
+        content_wrapper = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
+        content_wrapper.grid_columnconfigure(0, weight=1)
+        content_wrapper.grid_rowconfigure(1, weight=1)
+
+        ctk.CTkLabel(content_wrapper, text=character.name, font=ctk.CTkFont(size=20, weight="bold")).grid(row=0, column=0, pady=5)
+        
+        sheet_pane = ctk.CTkFrame(content_wrapper, fg_color="transparent")
         sheet_pane.grid(row=1, column=0, pady=10, sticky="nsew")
         sheet_pane.grid_columnconfigure((0, 1), weight=1)
         sheet_pane.grid_rowconfigure(0, weight=1)
+        
         stats_frame = ctk.CTkScrollableFrame(sheet_pane, label_text="Stats & Skills")
         stats_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        
         inv_frame = ctk.CTkScrollableFrame(sheet_pane, label_text="Inventory")
         inv_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-        self.char_sheet_entries.clear()
+        
         for key, value in {**character.attributes, **character.skills}.items():
             frame = ctk.CTkFrame(stats_frame, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
@@ -86,11 +108,16 @@ class CharacterView:
             entry.insert(0, value)
             entry.pack(side="left", fill="x", expand=True)
             self.char_sheet_entries[key] = entry
+            
         self.inv_textbox = ctk.CTkTextbox(inv_frame)
         self.inv_textbox.pack(fill="both", expand=True, padx=5, pady=5)
-        for item in character.inventory: self.inv_textbox.insert("end", f"{item.get('name', 'N/A')}: {item.get('description', '')}\n")
+        for item in character.inventory:
+            self.inv_textbox.insert("end", f"{item.get('name', 'N/A')}: {item.get('description', '')}\n")
         
-        button_frame = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
+        button_frame = ctk.CTkFrame(content_wrapper, fg_color="transparent")
         button_frame.grid(row=2, column=0, pady=10)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_character_sheet).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Delete Character", command=controller.delete_current_character, fg_color="#D2691E", hover_color="#B2590E").pack(side="left", padx=10)
+        
+        # --- FIX: Make the fully built UI visible all at once ---
+        content_wrapper.pack(fill="both", expand=True)
