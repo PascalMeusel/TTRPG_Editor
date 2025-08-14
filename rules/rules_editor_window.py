@@ -8,6 +8,7 @@ class RulesEditorWindow(ctk.CTkToplevel):
 
         self.title("Rule Set Editor")
         self.geometry("800x600")
+        self.configure(fg_color="#2B2B2B")
         
         # --- THE FIX: Intercept the 'X' button click ---
         self.protocol("WM_DELETE_WINDOW", self._on_close)

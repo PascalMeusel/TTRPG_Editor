@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from PIL import Image, ImageTk, ImageGrab
+from PIL import Image, ImageTk, ImageDraw, ImageGrab # <-- Add ImageDraw
 import os
 
 class MapView:
@@ -11,6 +11,8 @@ class MapView:
         self.editor_bg_image = None
         self.PC_COLOR = "#00BFFF"
         self.NPC_COLOR = "#DC143C"
+
+    # ... (all other methods like setup_editor_ui, setup_viewer_ui, etc. remain exactly the same) ...
 
     def setup_editor_ui(self, controller):
         """Builds the entire static UI for the Map Editor tab ONCE."""
@@ -88,16 +90,37 @@ class MapView:
         self.viewer_canvas.bind("<Control-Button-1>", controller.on_viewer_canvas_ctrl_press)
 
     def save_canvas_to_png(self, filepath, map_model):
+        """
+        --- FIX: Generates the map image directly instead of screenshotting. ---
+        This is a much more reliable method that works regardless of window state.
+        """
         try:
-            x = self.editor_canvas.winfo_rootx()
-            y = self.editor_canvas.winfo_rooty()
-            width = map_model.width * map_model.grid_size
-            height = map_model.height * map_model.grid_size
-            img = ImageGrab.grab(bbox=(x, y, x + width, y + height))
-            img.save(filepath)
+            grid_size = map_model.grid_size
+            width = map_model.width * grid_size
+            height = map_model.height * grid_size
+
+            # Create a new blank image in memory
+            image = Image.new("RGB", (width, height), "#2B2B2B") # Default dark background
+            draw = ImageDraw.Draw(image)
+
+            # 1. Draw all map elements from the model onto the image
+            for elem in map_model.map_elements:
+                coords = tuple(c * grid_size for c in elem['coords'])
+                draw.rectangle(coords, fill=elem['color'], outline=None)
+
+            # 2. Explicitly draw the grid lines onto the image
+            grid_line_color = "#444444"
+            for i in range(0, width, grid_size): # Vertical lines
+                draw.line([(i, 0), (i, height)], fill=grid_line_color, width=1)
+            for i in range(0, height, grid_size): # Horizontal lines
+                draw.line([(0, i), (width, i)], fill=grid_line_color, width=1)
+
+            # Save the composed image from memory to the specified file
+            image.save(filepath)
             return True
         except Exception as e:
-            print(f"Error saving canvas to PNG: {e}")
+            # This will now catch errors related to image processing, not screen grabbing
+            print(f"Error saving canvas to PNG with ImageDraw: {e}")
             return False
 
     def _draw_grid(self, canvas, width, height, grid_size):

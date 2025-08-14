@@ -1,4 +1,4 @@
-from tkinter import messagebox
+from custom_dialogs import MessageBox
 from .map_model import MapModel
 from .map_view import MapView
 import math
@@ -35,14 +35,18 @@ class MapController:
         self._redraw_all()
 
     def new_map(self):
-        """Creates a new 50x50 map, using the scale from the UI."""
-        if not messagebox.askyesno("Confirm", "This will erase the current map design. Are you sure?"):
-            return
+        """Creates a new 50x50 map, asking for confirmation only if the map has been modified."""
+        # --- FIX: Only ask for confirmation if the map is not blank. ---
+        # A blank map only has 1 element (the background rectangle).
+        if len(self.model.map_elements) > 1:
+            if not MessageBox.askyesno("Confirm", "This will erase the current map design. Are you sure?", parent=self.view.editor_tab):
+                return
+                
         try:
             scale = float(self.view.scale_entry.get())
             if scale <= 0: raise ValueError("Scale must be positive")
         except ValueError:
-            messagebox.showerror("Error", "Invalid grid scale. Please enter a positive number."); return
+            MessageBox.showerror("Error", "Invalid grid scale. Please enter a positive number.", parent=self.view.editor_tab); return
             
         self.model = MapModel(self.campaign_path, grid_scale=scale)
         self.model.clear_map()
@@ -50,6 +54,8 @@ class MapController:
         self.view.map_name_entry.insert(0, "New Custom Map")
         self.set_tool("select")
         self._redraw_all()
+        # A new map has no unsaved changes yet.
+        self.app_controller.set_dirty_flag(False)
 
     def set_source_controllers(self, char_controller, npc_controller):
         self.char_controller = char_controller
@@ -100,7 +106,7 @@ class MapController:
             if self.model.add_token(token_name, token_type, x_grid, y_grid):
                 self._redraw_viewer_canvas()
                 self.app_controller.set_dirty_flag()
-            else: messagebox.showwarning("Warning", f"Token '{token_name}' is already on the map.")
+            else: MessageBox.showwarning("Warning", f"Token '{token_name}' is already on the map.", parent=self.view.editor_tab)
             self.set_tool("select")
             return
         
@@ -174,12 +180,18 @@ class MapController:
         self.view.draw_viewer_canvas(self.model, self)
 
     def generate_dungeon(self):
-        if not messagebox.askyesno("Confirm", "This will erase the current map design. Are you sure?"): return
+        """Generates a dungeon, asking for confirmation only if the map has been modified."""
+        # --- FIX: Only ask for confirmation if the map is not blank. ---
+        if len(self.model.map_elements) > 1:
+            if not MessageBox.askyesno("Confirm", "This will erase the current map design. Are you sure?", parent=self.view.editor_tab):
+                return
+
         try:
             scale = float(self.view.scale_entry.get())
             if scale <= 0: raise ValueError("Scale must be positive")
         except ValueError:
-            messagebox.showerror("Error", "Invalid grid scale."); return
+            MessageBox.showerror("Error", "Invalid grid scale.", parent=self.view.editor_tab); return
+            
         self.model = MapModel(self.campaign_path, grid_scale=scale) # Generates a 50x50 map
         self.model.generate_dungeon(room_max_size=12, room_min_size=5, max_rooms=30)
         self.view.map_name_entry.delete(0, 'end')
@@ -189,31 +201,36 @@ class MapController:
 
     def save_map(self):
         map_name = self.view.map_name_entry.get()
-        if not map_name: messagebox.showerror("Error", "Please enter a name for the map."); return
+        if not map_name: MessageBox.showerror("Error", "Please enter a name for the map.", parent=self.view.editor_tab); return
         
         self.model.name = map_name
         try:
             self.model.grid_scale = float(self.view.scale_entry.get())
         except ValueError:
-            messagebox.showerror("Error", "Invalid grid scale."); return
+            MessageBox.showerror("Error", "Invalid grid scale.", parent=self.view.editor_tab); return
 
         png_path = os.path.join(self.model.maps_dir, f"{map_name.lower().replace(' ', '_')}.png")
         if not self.view.save_canvas_to_png(png_path, self.model):
-            messagebox.showerror("Error", "Failed to save map image."); return
+            MessageBox.showerror("Error", "Failed to save map image.", parent=self.view.editor_tab); return
             
+        # Saving the map automatically saves the tokens as well, so unsaved changes are now committed.
         self.save_token_positions()
+        # Reset the flag after a successful save
+        self.app_controller.set_dirty_flag(False)
         self.refresh_map_list()
+        MessageBox.showinfo("Success", f"Map '{self.model.name}' and its token positions have been saved.", parent=self.view.editor_tab)
+
 
     def save_token_positions(self):
-        if not self.model.name or self.model.name in ["New Blank Map", "New Custom Map"]:
-             messagebox.showwarning("Save Required", "Please save the main map background first before saving token positions.")
+        if not self.model.name or self.model.name in ["New Blank Map", "New Custom Map", "Generated Dungeon"]:
+             MessageBox.showwarning("Save Required", "Please save the main map background first before saving token positions.", parent=self.view.editor_tab)
              return
         try:
             self.model.save_map_data()
             self.app_controller.set_dirty_flag(False)
-            messagebox.showinfo("Success", f"Token positions for '{self.model.name}' saved.")
+            MessageBox.showinfo("Success", f"Token positions for '{self.model.name}' saved.", parent=self.view.editor_tab)
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save token data: {e}")
+            MessageBox.showerror("Error", f"Failed to save token data: {e}", parent=self.view.editor_tab)
 
     def refresh_map_list(self):
         maps = MapModel.get_all_maps(self.campaign_path)
@@ -234,11 +251,11 @@ class MapController:
             self._redraw_viewer_canvas()
             self.app_controller.set_dirty_flag(False)
         else:
-            messagebox.showerror("Error", f"Could not load map data for '{map_name}'.")
+            MessageBox.showerror("Error", f"Could not load map data for '{map_name}'.", parent=self.view.editor_tab)
 
     def delete_selected_tokens(self):
-        if not self.selected_tokens: messagebox.showinfo("Info", "No tokens selected to delete."); return
-        if messagebox.askyesno("Confirm", f"Are you sure you want to delete {len(self.selected_tokens)} token(s)?"):
+        if not self.selected_tokens: MessageBox.showinfo("Info", "No tokens selected to delete.", parent=self.view.editor_tab); return
+        if MessageBox.askyesno("Confirm", f"Are you sure you want to delete {len(self.selected_tokens)} token(s)?", parent=self.view.editor_tab):
             for token in self.selected_tokens:
                 self.model.delete_token(token['name'])
             self.selected_tokens = []

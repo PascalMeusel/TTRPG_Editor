@@ -1,4 +1,5 @@
-from tkinter import filedialog, messagebox
+from tkinter import filedialog
+from custom_dialogs import MessageBox
 from .music_model import MusicModel
 from .music_view import MusicView
 
@@ -26,10 +27,9 @@ class MusicController:
         copied_count = self.model.add_music_files(source_paths)
         
         if copied_count > 0:
-            messagebox.showinfo("Music Added", f"Successfully added {copied_count} new song(s).")
-            self.refresh_music_list()
+            MessageBox.showinfo("Music Added", f"Successfully added {copied_count} new song(s).", self.view.parent_frame)
         else:
-            messagebox.showwarning("No Music Added", "No new files were added. They may have already existed or there was an error.")
+            MessageBox.showwarning("No Music Added", "No new files were added. They may have already existed or there was an error.", self.view.parent_frame)
 
     def play_song(self):
         song = self.view.music_list.get()

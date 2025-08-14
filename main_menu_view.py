@@ -2,63 +2,6 @@ import customtkinter as ctk
 import threading
 import queue
 
-class NewCampaignDialog(ctk.CTkToplevel):
-    def __init__(self, parent, rulesets):
-        super().__init__(parent)
-        self.title("New Campaign")
-        self.geometry("400x300")
-        self.resizable(False, False)
-        
-        self.protocol("WM_DELETE_WINDOW", self._on_close)
-        
-        self.result = None
-        self.grid_columnconfigure(0, weight=1)
-
-        ctk.CTkLabel(self, text="Create New Campaign", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(20, 10))
-        
-        # Name Input
-        ctk.CTkLabel(self, text="Campaign Name:", anchor="w").pack(pady=(5, 0), padx=20, fill="x")
-        self.name_entry = ctk.CTkEntry(self, width=300)
-        self.name_entry.pack(pady=(0, 10), padx=20, fill="x")
-        
-        # Ruleset Selection
-        ctk.CTkLabel(self, text="Choose Rule Set:", anchor="w").pack(pady=(5, 0), padx=20, fill="x")
-        self.combobox = ctk.CTkComboBox(self, values=rulesets, state="readonly", width=300)
-        self.combobox.pack(pady=(0, 10), padx=20, fill="x")
-        if rulesets:
-            self.combobox.set(rulesets[0])
-        
-        # Buttons
-        button_frame = ctk.CTkFrame(self, fg_color="transparent")
-        button_frame.pack(pady=20)
-        ctk.CTkButton(button_frame, text="Create Campaign", command=self._on_ok).pack(side="left", padx=10)
-        ctk.CTkButton(button_frame, text="Cancel", command=self._on_close).pack(side="left", padx=10)
-
-        self.transient(parent) # Set as modal
-        self.grab_set()
-        self.wait_window(self)
-
-    def _on_close(self):
-        self.grab_release()
-        self.destroy()
-
-    def _on_ok(self):
-        campaign_name = self.name_entry.get().strip()
-        ruleset_name = self.combobox.get()
-        
-        if not campaign_name or not ruleset_name or ruleset_name == "No rule sets found":
-            self.result = None
-            self._on_close()
-            return
-            
-        self.result = (campaign_name, ruleset_name)
-        self._on_close()
-
-    def get_input(self):
-        return self.result
-
-
-
 class MainMenuView(ctk.CTkFrame):
     """The UI for the main menu screen, featuring a clean vertical layout."""
     def __init__(self, parent, controller):
@@ -127,6 +70,7 @@ class LoadGameWindow(ctk.CTkToplevel):
 
         self.title("Load Game")
         self.geometry("400x500")
+        self.configure(fg_color="#2B2B2B")
         self.resizable(False, False)
         
         self.protocol("WM_DELETE_WINDOW", self._on_close) # Handle 'X' button
@@ -201,41 +145,62 @@ class LoadGameWindow(ctk.CTkToplevel):
         if campaign_to_load:
             self.controller.root.after(50, lambda: self.controller.load_game_flow(campaign_to_load))
 
-class RulesetSelectionDialog(ctk.CTkToplevel):
-    """A modal dialog window to force the user to select a ruleset from a dropdown."""
-    def __init__(self, parent, title, text, values):
+class NewCampaignDialog(ctk.CTkToplevel):
+    def __init__(self, parent, rulesets):
         super().__init__(parent)
-        self.title(title)
-        self.geometry("400x200")
+        self.title("New Campaign")
+        self.geometry("400x300")
+        self.configure(fg_color="#2B2B2B")
         self.resizable(False, False)
         
-        self.protocol("WM_DELETE_WINDOW", self._on_close) # Handle 'X' button
+        self.protocol("WM_DELETE_WINDOW", self._on_close)
         
-        self.selection = None
+        self.result = None
         self.grid_columnconfigure(0, weight=1)
-        
-        ctk.CTkLabel(self, text=text, wraplength=380).pack(pady=(20, 10), padx=20)
-        
-        self.combobox = ctk.CTkComboBox(self, values=values, state="readonly")
-        self.combobox.pack(pady=10, padx=20, fill="x")
-        if values:
-            self.combobox.set(values[0])
 
-        ctk.CTkButton(self, text="Confirm", command=self._on_ok).pack(pady=20)
+        ctk.CTkLabel(self, text="Create New Campaign", font=ctk.CTkFont(size=20, weight="bold")).pack(pady=(20, 10))
+        
+        # Name Input
+        ctk.CTkLabel(self, text="Campaign Name:", anchor="w").pack(pady=(5, 0), padx=20, fill="x")
+        self.name_entry = ctk.CTkEntry(self, width=300)
+        self.name_entry.pack(pady=(0, 10), padx=20, fill="x")
+        
+        # Ruleset Selection
+        ctk.CTkLabel(self, text="Choose Rule Set:", anchor="w").pack(pady=(5, 0), padx=20, fill="x")
+        self.combobox = ctk.CTkComboBox(self, values=rulesets, state="readonly", width=300)
+        self.combobox.pack(pady=(0, 10), padx=20, fill="x")
+        if rulesets:
+            self.combobox.set(rulesets[0])
+        
+        # Buttons
+        button_frame = ctk.CTkFrame(self, fg_color="transparent")
+        button_frame.pack(pady=20)
+        ctk.CTkButton(button_frame, text="Create Campaign", command=self._on_ok).pack(side="left", padx=10)
+        ctk.CTkButton(button_frame, text="Cancel", command=self._on_close).pack(side="left", padx=10)
 
-        self.transient(parent)
+        self.transient(parent) # Set as modal
+
+        # --- FIX: Ensure the window is viewable before making it modal ---
+        self.update_idletasks()
+
         self.grab_set()
         self.wait_window(self)
 
     def _on_close(self):
-        """Ensures the grab is released before destroying the window."""
         self.grab_release()
         self.destroy()
 
-    def _on_ok(self, event=None):
-        """Saves the selection and closes the dialog."""
-        self.selection = self.combobox.get()
+    def _on_ok(self):
+        campaign_name = self.name_entry.get().strip()
+        ruleset_name = self.combobox.get()
+        
+        if not campaign_name or not ruleset_name or ruleset_name == "No rule sets found":
+            self.result = None
+            self._on_close()
+            return
+            
+        self.result = (campaign_name, ruleset_name)
         self._on_close()
 
-    def get_selection(self):
-        return self.selection
+    def get_input(self):
+        return self.result

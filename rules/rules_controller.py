@@ -1,4 +1,4 @@
-from tkinter import messagebox
+from custom_dialogs import MessageBox
 from .rules_model import RulesModel
 
 class RulesController:
@@ -24,7 +24,7 @@ class RulesController:
 
         name = self.view.rules_name_entry.get()
         if not name:
-            messagebox.showerror("Error", "Rule set name is required.", parent=self.view)
+            MessageBox.showerror("Error", "Rule set name is required.", parent=self.view)
             return
         
         attrs = [attr.strip() for attr in self.view.rules_attrs_entry.get().split(',') if attr.strip()]
@@ -34,4 +34,4 @@ class RulesController:
         formulas = {f.split(':')[0].strip(): f.split(':')[1].strip() for f in formulas_raw if ':' in f}
 
         self.model.save_rule_set(name, attrs, skills, formulas)
-        messagebox.showinfo("Success", f"Rule set '{name}' saved.", parent=self.view)
+        MessageBox.showinfo("Success", f"Rule set '{name}' saved.", parent=self.view)

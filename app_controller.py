@@ -1,5 +1,5 @@
 import customtkinter as ctk
-from tkinter import messagebox
+from custom_dialogs import MessageBox
 import os
 
 from rules.rules_controller import RulesController
@@ -140,7 +140,7 @@ class AppController:
                     self.on_rule_set_loaded(ruleset_data)
                     self.show_page("Characters")
                 else:
-                    messagebox.showerror("Error", f"Failed to load required ruleset '{ruleset_name}'.")
+                    MessageBox.showerror("Error", f"Failed to load required ruleset '{ruleset_name}'.", parent=self.root)
                     self.show_main_menu()
 
         self.editor_frame.pack(fill="both", expand=True)
@@ -163,12 +163,12 @@ class AppController:
             self.show_main_menu()
             return
         
-        response = messagebox.askyesnocancel("Unsaved Changes",
+        response = MessageBox.askyesnocancel("Unsaved Changes",
                                              "You have unsaved changes. Do you want to save them before returning to the main menu?",
-                                             icon=messagebox.WARNING)
+                                             parent=self.root)
         
         if response is True:
-            messagebox.showinfo("Save Manually", "Please use the 'Save Changes' or 'Save Token Positions' buttons on the relevant pages to save your work.")
+            MessageBox.showinfo("Save Manually", "Please use the 'Save Changes' or 'Save Token Positions' buttons on the relevant pages to save your work.", parent=self.root)
             return
         elif response is False:
             self.unsaved_changes = False # Discard changes
@@ -184,7 +184,7 @@ class AppController:
         rulesets = rules_model.get_all_rule_sets()
         
         if not rulesets:
-            messagebox.showerror("Error", "No rule sets found. Please create a rule set first.")
+            MessageBox.showerror("Error", "No rule sets found. Please create a rule set first.", self.root)
             return
 
         # 2. Open the new, combined dialog for name and ruleset
@@ -207,12 +207,12 @@ class AppController:
             self.current_campaign_path = path
             self._show_editor()
         else:
-            messagebox.showerror("Error", f"A campaign named '{campaign_name}' already exists.")
+            MessageBox.showerror("Error", f"A campaign named '{campaign_name}' already exists.", self.root)
 
     def load_game_flow(self, campaign_name):
         """Loads a game, reusing the editor if it's the same campaign, or rebuilding if it's different."""
         if not campaign_name:
-            messagebox.showerror("Error", "Please select a campaign to load.")
+            MessageBox.showerror("Error", "Please select a campaign to load.", self.root)
             return
 
         new_path = os.path.join(self.campaign_model.base_dir, campaign_name)
@@ -228,7 +228,7 @@ class AppController:
             if os.path.exists(self.current_campaign_path):
                 self._show_editor()
             else:
-                messagebox.showerror("Error", f"Could not find campaign data for '{campaign_name}'.")
+                MessageBox.showerror("Error", f"Could not find campaign data for '{campaign_name}'.", self.root)
 
     def show_ruleset_creator_standalone(self):
         ruleset_window = RulesEditorWindow(self.root)
@@ -237,7 +237,7 @@ class AppController:
         ruleset_window.set_controller(standalone_rules_controller)
 
     def show_placeholder_message(self):
-        messagebox.showinfo("Not Implemented", "This feature has not been implemented yet.")
+        MessageBox.showinfo("Not Implemented", "This feature has not been implemented yet.", self.root)
 
     def exit_app(self):
         self.root.quit()

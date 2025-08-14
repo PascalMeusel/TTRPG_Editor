@@ -1,4 +1,4 @@
-from tkinter import messagebox
+from custom_dialogs import MessageBox
 from .character_model import CharacterModel
 from .character_view import CharacterView
 
@@ -42,12 +42,12 @@ class CharacterController:
     def save_new_character(self):
         """Saves a new character to the current campaign."""
         if not self.current_rule_set:
-            messagebox.showerror("Error", "No rule set loaded.")
+            MessageBox.showerror("Error", "No rule set loaded.", self.view.creator_tab)
             return
         
         name = self.view.char_name_entry.get()
         if not name:
-            messagebox.showerror("Error", "Character name is required.")
+            MessageBox.showerror("Error", "Character name is required.", self.view.creator_tab)
             return
         
         char = CharacterModel(self.campaign_path, name, self.current_rule_set['name'])
@@ -59,7 +59,7 @@ class CharacterController:
                 char.set_skill(key, value)
         
         char.save()
-        messagebox.showinfo("Success", f"Character '{name}' saved.")
+        MessageBox.showinfo("Success", f"Character '{name}' saved.", self.view.creator_tab)
         self.app_controller.on_character_or_npc_list_changed()
         self.view.char_name_entry.delete(0, 'end')
         for entry in self.view.char_creator_entries.values():
@@ -75,7 +75,7 @@ class CharacterController:
 
         self.current_character = CharacterModel.load(self.campaign_path, char_name)
         if not self.current_character:
-            messagebox.showerror("Error", f"Could not load character: {char_name}")
+            MessageBox.showerror("Error", f"Could not load character: {char_name}", self.view.sheet_tab)
             return
             
         self.view.display_sheet_data(self.current_character)
@@ -104,22 +104,22 @@ class CharacterController:
         self.current_character.save()
         
         self.app_controller.set_dirty_flag(False)
-        messagebox.showinfo("Success", f"Changes to '{self.current_character.name}' saved.")
+        MessageBox.showinfo("Success", f"Changes to '{self.current_character.name}' saved.", self.view.sheet_tab)
 
     def delete_current_character(self):
         """Deletes the character currently loaded in the sheet view."""
         if not self.current_character: return
         
         char_name = self.current_character.name
-        if messagebox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete {char_name}?"):
+        if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete {char_name}?", parent=self.view.sheet_tab):
             if CharacterModel.delete(self.campaign_path, char_name):
-                messagebox.showinfo("Deleted", f"Character '{char_name}' has been deleted.")
+                MessageBox.showinfo("Deleted", f"Character '{char_name}' has been deleted.", self.view.sheet_tab)
                 self.current_character = None
                 self.view.clear_sheet()
                 self.app_controller.on_character_or_npc_list_changed()
                 self.app_controller.set_dirty_flag(False)
             else:
-                messagebox.showerror("Error", f"Could not find file for character '{char_name}'.")
+                MessageBox.showerror("Error", f"Could not find file for character '{char_name}'.", self.view.sheet_tab)
 
     def mark_as_dirty(self, event=None):
         """Notifies the AppController that there are unsaved changes."""

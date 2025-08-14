@@ -2,4 +2,8 @@
 venv
 dist
 build
-data
+data/campaigns/*
+!data/campaigns/.gitkeep
+
+/assets/music/*
+!/assets/music/.gitkeep
