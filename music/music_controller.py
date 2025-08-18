@@ -1,7 +1,11 @@
 from tkinter import filedialog
-from custom_dialogs import MessageBox
 from .music_model import MusicModel
 from .music_view import MusicView
+from custom_dialogs import MessageBox
+try:
+    import pygame
+except ImportError:
+    pygame = None
 
 class MusicController:
     """Controller for the Music Player feature."""
@@ -28,15 +32,26 @@ class MusicController:
         
         if copied_count > 0:
             MessageBox.showinfo("Music Added", f"Successfully added {copied_count} new song(s).", self.view.parent_frame)
+            self.refresh_music_list()
         else:
             MessageBox.showwarning("No Music Added", "No new files were added. They may have already existed or there was an error.", self.view.parent_frame)
+    
+    def handle_play_pause(self):
+        """Smart handler for the combined Play/Pause button."""
+        if not pygame:
+            return
 
-    def play_song(self):
-        song = self.view.music_list.get()
-        self.model.play(song)
+        selected_song = self.view.music_list.get()
+        if not selected_song or "No music" in selected_song:
+            return
 
-    def pause_song(self):
-        self.model.toggle_pause()
+        # --- FIX: Simplified and corrected logic ---
+        # If a different song is selected from the dropdown, it MUST be a fresh play.
+        if self.model.current_song != selected_song:
+            self.model.play(selected_song)
+        # Otherwise, the song is the same, so we simply toggle between pause and unpause.
+        else:
+            self.model.toggle_pause()
 
     def stop_song(self):
         self.model.stop()

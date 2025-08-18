@@ -9,9 +9,8 @@ class CharacterModel:
         self.rule_set_name = rule_set_name
         self.attributes = {}
         self.skills = {}
-        self.inventory = []
+        self.inventory = [] # e.g., [{"item_id": "...", "quantity": 1, "equipped": False}]
         self.data_dir = os.path.join(self.campaign_path, 'characters')
-        # This check is good practice, though the campaign model creates it.
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
 
@@ -30,18 +29,24 @@ class CharacterModel:
         char = cls(campaign_path, data['name'], data['rule_set'])
         char.attributes = data.get('attributes', {})
         char.skills = data.get('skills', {})
-        char.inventory = data.get('inventory', [])
+        
+        inventory_data = data.get('inventory', [])
+        # --- FIX: Ensure backward compatibility for saves without the 'equipped' key ---
+        for item_entry in inventory_data:
+            if 'equipped' not in item_entry:
+                item_entry['equipped'] = False # Default to not equipped
+        char.inventory = inventory_data
+
         return char
 
     def save(self):
-        """Saves the character data to a JSON file in the campaign's character folder."""
+        """Saves the character data to a JSON file."""
         filepath = os.path.join(self.data_dir, f"{self.name.lower().replace(' ', '_')}.json")
         with open(filepath, 'w') as f:
             json.dump(self.to_dict(), f, indent=4)
 
     @staticmethod
     def load(campaign_path, character_name):
-        """Loads a character's data from a specific campaign."""
         data_dir = os.path.join(campaign_path, 'characters')
         filepath = os.path.join(data_dir, f"{character_name.lower().replace(' ', '_')}.json")
         if not os.path.exists(filepath): return None
@@ -51,10 +56,8 @@ class CharacterModel:
 
     @staticmethod
     def get_for_ruleset(campaign_path, rule_set_name):
-        """Gets characters for a ruleset from within a specific campaign."""
         data_dir = os.path.join(campaign_path, 'characters')
         if not os.path.exists(data_dir): return []
-        
         valid_characters = []
         for filename in os.listdir(data_dir):
             if filename.endswith('.json'):
@@ -69,7 +72,6 @@ class CharacterModel:
 
     @staticmethod
     def delete(campaign_path, character_name):
-        """Deletes a character's file from a specific campaign."""
         data_dir = os.path.join(campaign_path, 'characters')
         filepath = os.path.join(data_dir, f"{character_name.lower().replace(' ', '_')}.json")
         if os.path.exists(filepath):

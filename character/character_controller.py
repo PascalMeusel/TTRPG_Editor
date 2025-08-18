@@ -1,11 +1,13 @@
-from custom_dialogs import MessageBox
+from tkinter import messagebox
 from .character_model import CharacterModel
-from .character_view import CharacterView
+from .character_view import CharacterView, AddItemDialog
+from custom_dialogs import MessageBox
 
 class CharacterController:
     """Controller for the Character feature, scoped to a specific campaign."""
-    def __init__(self, app_controller, creator_tab, sheet_tab, campaign_path):
+    def __init__(self, app_controller, creator_tab, sheet_tab, campaign_path, item_controller):
         self.app_controller = app_controller
+        self.item_controller = item_controller
         self.view = CharacterView(creator_tab, sheet_tab)
         self.campaign_path = campaign_path
         self.current_rule_set = None
@@ -20,13 +22,10 @@ class CharacterController:
         return []
 
     def handle_rule_set_load(self, rule_set):
-        """Called by the AppController. This is where the one-time UI build happens."""
+        """Called by the AppController. Builds dynamic UI parts."""
         self.current_rule_set = rule_set
         self.view.build_dynamic_fields(rule_set)
-        
-        # Build the recyclable sheet UI now that we have the ruleset
         self.view.build_sheet_ui(rule_set, self)
-        
         self.update_character_sheet_list()
 
     def update_character_sheet_list(self):
@@ -66,7 +65,7 @@ class CharacterController:
             entry.delete(0, 'end')
 
     def load_character_to_sheet(self):
-        """Loads a selected character into the sheet view by populating the recycled UI."""
+        """Loads a selected character into the sheet view."""
         char_name = self.view.char_sheet_list.get()
         if not char_name or char_name == "-":
             self.current_character = None
@@ -78,40 +77,35 @@ class CharacterController:
             MessageBox.showerror("Error", f"Could not load character: {char_name}", self.view.sheet_tab)
             return
             
-        self.view.display_sheet_data(self.current_character)
+        self.view.display_sheet_data(self.current_character, self.item_controller)
         self.app_controller.set_dirty_flag(False)
 
     def save_character_sheet(self):
-        """Saves any changes made to the character currently loaded in the sheet view."""
+        """Saves changes to the character currently loaded in the sheet view."""
         if not self.current_character: return
         
         for key, entry in self.view.char_sheet_entries.items():
-            value = entry.get()
-            if key in self.current_character.attributes:
-                self.current_character.set_attribute(key, value)
+            full_value = entry.get()
+            # If the value is "Effective (Base)", parse out the base value
+            if "(" in full_value and full_value.endswith(")"):
+                base_value = full_value.split('(')[-1].strip(')')
             else:
-                self.current_character.set_skill(key, value)
-        
-        inv_text = self.view.inv_textbox.get("1.0", "end").strip()
-        new_inventory = []
-        if inv_text:
-            for line in inv_text.split('\n'):
-                if not line.strip(): continue
-                parts = line.split(':', 1)
-                new_inventory.append({"name": parts[0].strip(), "description": parts[1].strip() if len(parts) > 1 else ""})
-        self.current_character.inventory = new_inventory
+                base_value = full_value
+
+            if key in self.current_character.attributes:
+                self.current_character.set_attribute(key, base_value)
+            else:
+                self.current_character.set_skill(key, base_value)
         
         self.current_character.save()
-        
         self.app_controller.set_dirty_flag(False)
         MessageBox.showinfo("Success", f"Changes to '{self.current_character.name}' saved.", self.view.sheet_tab)
 
     def delete_current_character(self):
         """Deletes the character currently loaded in the sheet view."""
         if not self.current_character: return
-        
         char_name = self.current_character.name
-        if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete {char_name}?", parent=self.view.sheet_tab):
+        if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete {char_name}?", self.view.sheet_tab):
             if CharacterModel.delete(self.campaign_path, char_name):
                 MessageBox.showinfo("Deleted", f"Character '{char_name}' has been deleted.", self.view.sheet_tab)
                 self.current_character = None
@@ -120,6 +114,60 @@ class CharacterController:
                 self.app_controller.set_dirty_flag(False)
             else:
                 MessageBox.showerror("Error", f"Could not find file for character '{char_name}'.", self.view.sheet_tab)
+
+    def show_add_item_dialog(self):
+        """Opens the dialog to add an item to the current character's inventory."""
+        if not self.current_character: return
+        
+        dialog = AddItemDialog(parent=self.view.sheet_tab, all_items=self.item_controller.all_items)
+        selected_item = dialog.get_selection()
+        
+        if selected_item:
+            self.add_item_to_inventory(selected_item)
+
+    def add_item_to_inventory(self, item_to_add):
+        """Adds a given item to the current character's model."""
+        if not self.current_character: return
+        
+        for inv_entry in self.current_character.inventory:
+            if inv_entry["item_id"] == item_to_add["id"]:
+                inv_entry["quantity"] += 1
+                break
+        else:
+            self.current_character.inventory.append({
+                "item_id": item_to_add["id"], 
+                "quantity": 1,
+                "equipped": False 
+            })
+        
+        self.view.display_sheet_data(self.current_character, self.item_controller)
+        self.mark_as_dirty()
+
+    def remove_item_from_inventory(self, inv_entry_to_remove):
+        """Removes a given item entry from the current character's model."""
+        if not self.current_character: return
+        
+        for i, inv_entry in enumerate(self.current_character.inventory):
+            if inv_entry["item_id"] == inv_entry_to_remove["item_id"]:
+                inv_entry["quantity"] -= 1
+                if inv_entry["quantity"] <= 0:
+                    self.current_character.inventory.pop(i)
+                break
+
+        self.view.display_sheet_data(self.current_character, self.item_controller)
+        self.mark_as_dirty()
+
+    def toggle_item_equipped(self, inv_entry_to_toggle):
+        """Finds an item in the inventory and flips its 'equipped' status."""
+        if not self.current_character: return
+
+        for inv_entry in self.current_character.inventory:
+            if inv_entry["item_id"] == inv_entry_to_toggle["item_id"]:
+                inv_entry["equipped"] = not inv_entry.get("equipped", False)
+                break
+        
+        self.view.display_sheet_data(self.current_character, self.item_controller)
+        self.mark_as_dirty()
 
     def mark_as_dirty(self, event=None):
         """Notifies the AppController that there are unsaved changes."""

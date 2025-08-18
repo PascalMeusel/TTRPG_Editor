@@ -9,9 +9,8 @@ class NpcModel:
         self.rule_set_name = rule_set_name
         self.attributes = {}
         self.skills = {}
-        self.inventory = []
+        self.inventory = [] # e.g., [{"item_id": "...", "quantity": 1, "equipped": False}]
         self.gm_notes = ""
-        self.loot = []
         self.data_dir = os.path.join(self.campaign_path, 'npcs')
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
@@ -20,7 +19,7 @@ class NpcModel:
         """Converts the NPC object to a dictionary for saving."""
         return {
             'name': self.name, 'rule_set': self.rule_set_name, 'attributes': self.attributes,
-            'skills': self.skills, 'inventory': self.inventory, 'gm_notes': self.gm_notes, 'loot': self.loot
+            'skills': self.skills, 'inventory': self.inventory, 'gm_notes': self.gm_notes
         }
 
     @classmethod
@@ -29,9 +28,19 @@ class NpcModel:
         npc = cls(campaign_path, data['name'], data['rule_set'])
         npc.attributes = data.get('attributes', {})
         npc.skills = data.get('skills', {})
-        npc.inventory = data.get('inventory', [])
         npc.gm_notes = data.get('gm_notes', "")
-        npc.loot = data.get('loot', [])
+        
+        inventory_data = data.get('inventory', [])
+        # Ensure backward compatibility for saves without the 'equipped' key
+        for item_entry in inventory_data:
+            if 'equipped' not in item_entry:
+                item_entry['equipped'] = False # Default to not equipped
+        npc.inventory = inventory_data
+        
+        # Deprecate the old 'loot' field if it exists
+        if 'loot' in data:
+            print(f"Notice: Old 'loot' field detected for NPC '{data['name']}'. This is no longer used. Please manage items via the inventory.")
+
         return npc
 
     def save(self):

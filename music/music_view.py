@@ -7,25 +7,21 @@ class MusicView:
 
     def setup_ui(self, controller):
         """Builds a horizontal music player UI."""
-        # Main frame for the music player, sits inside the header
         music_frame = ctk.CTkFrame(self.parent_frame, fg_color="transparent")
         music_frame.pack(side="right", padx=10, pady=5)
         
-        # Song selection dropdown
+        # --- FIX: The ComboBox is now ONLY a selector. The 'command' is removed. ---
         self.music_list = ctk.CTkComboBox(music_frame, width=150)
         self.music_list.pack(side="left", padx=5)
 
-        # Play/Pause/Stop buttons
-        ctk.CTkButton(music_frame, text="▶", width=30, command=controller.play_song).pack(side="left", padx=(5, 2))
-        ctk.CTkButton(music_frame, text="❚❚", width=30, command=controller.pause_song).pack(side="left", padx=2)
+        # The Play/Pause button is the single point of action.
+        ctk.CTkButton(music_frame, text="▶❚❚", width=40, command=controller.handle_play_pause).pack(side="left", padx=(5, 2))
         ctk.CTkButton(music_frame, text="■", width=30, command=controller.stop_song).pack(side="left", padx=2)
         
-        # Volume slider
         volume_slider = ctk.CTkSlider(music_frame, from_=0, to=1, width=100, command=controller.set_volume)
         volume_slider.set(0.5)
         volume_slider.pack(side="left", padx=(10, 5))
 
-        # Add Music button
         ctk.CTkButton(music_frame, text="+", width=30, command=controller.add_music).pack(side="left", padx=5)
         
     def update_music_list(self, songs):

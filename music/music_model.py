@@ -1,6 +1,6 @@
 import os
 import shutil
-from utils import resource_path # Import the helper
+from utils import resource_path
 try:
     import pygame
 except ImportError:
@@ -10,12 +10,14 @@ except ImportError:
 class MusicModel:
     """Model for handling audio playback and file management."""
     def __init__(self, music_dir_name='assets/music'):
-        # Use the helper to get the correct base directory
         self.music_dir = resource_path(music_dir_name)
         if not os.path.exists(self.music_dir):
             os.makedirs(self.music_dir)
         if pygame:
             pygame.mixer.init()
+        
+        self.paused = False
+        self.current_song = None
 
     def get_music_files(self):
         """Returns a sorted list of music files in the assets directory."""
@@ -45,23 +47,38 @@ class MusicModel:
         return copied_count
 
     def play(self, song_name):
+        """Loads and plays a new song, resetting the paused state."""
         if not pygame or not song_name: return
         filepath = os.path.join(self.music_dir, song_name)
         if os.path.exists(filepath):
             pygame.mixer.music.load(filepath)
             pygame.mixer.music.play(-1)
+            self.paused = False
+            self.current_song = song_name
 
     def toggle_pause(self):
+        """Correctly toggles pause/unpause using a state flag."""
         if not pygame: return
-        if pygame.mixer.music.get_busy():
-            if pygame.mixer.music.get_pos() > 0:
-                pygame.mixer.music.unpause()
-            else:
+        
+        # --- FIX: Removed the flawed get_busy() check ---
+        # This allows the function to work correctly when unpausing.
+
+        if self.paused:
+            pygame.mixer.music.unpause()
+            self.paused = False
+        else:
+            # Only try to pause if a song is actually loaded and playing
+            if pygame.mixer.music.get_busy():
                 pygame.mixer.music.pause()
+                self.paused = True
 
     def stop(self):
+        """Stops the music and unloads the file to fully clear the state."""
         if not pygame: return
         pygame.mixer.music.stop()
+        pygame.mixer.music.unload()
+        self.paused = False
+        self.current_song = None
 
     def set_volume(self, volume):
         if not pygame: return

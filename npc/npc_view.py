@@ -1,4 +1,5 @@
 import customtkinter as ctk
+from character.character_view import AddItemDialog
 
 class NpcView:
     """Manages the UI for the NPC creator, manager, and sheet tabs."""
@@ -7,7 +8,7 @@ class NpcView:
         self.sheet_tab = sheet_tab
         self.npc_creator_entries = {}
         self.npc_sheet_entries = {}
-        self.sheet_is_built = False # Flag to check if the recycled UI exists
+        self.sheet_is_built = False
 
     def setup_ui(self, controller):
         """Builds all static UI elements for both NPC tabs."""
@@ -46,13 +47,10 @@ class NpcView:
         
         gm_fields_frame = ctk.CTkFrame(create_frame, fg_color="transparent")
         gm_fields_frame.grid(row=3, column=0, pady=10, padx=10, sticky="ew")
-        gm_fields_frame.grid_columnconfigure((0,1), weight=1)
+        gm_fields_frame.grid_columnconfigure(0, weight=1)
         ctk.CTkLabel(gm_fields_frame, text="GM Notes:", anchor="w").grid(row=0, column=0, sticky="w")
         self.npc_notes_text = ctk.CTkTextbox(gm_fields_frame, height=80)
-        self.npc_notes_text.grid(row=1, column=0, sticky="ew", padx=(0,5))
-        ctk.CTkLabel(gm_fields_frame, text="Loot (one per line):", anchor="w").grid(row=0, column=1, sticky="w", padx=(5,0))
-        self.npc_loot_text = ctk.CTkTextbox(gm_fields_frame, height=80)
-        self.npc_loot_text.grid(row=1, column=1, sticky="ew", padx=(5,0))
+        self.npc_notes_text.grid(row=1, column=0, sticky="ew")
         ctk.CTkButton(create_frame, text="Save NPC", command=controller.save_new_npc).grid(row=4, column=0, pady=10)
         
         manage_frame = ctk.CTkFrame(main_pane)
@@ -65,7 +63,6 @@ class NpcView:
 
     def setup_sheet_ui(self, controller):
         """Builds the static parts of the sheet tab."""
-        # --- REFINED LAYOUT: Main container now expands ---
         container = ctk.CTkFrame(self.sheet_tab, fg_color="transparent")
         container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=1)
@@ -76,13 +73,17 @@ class NpcView:
         ctk.CTkLabel(load_frame, text="Load NPC:").pack(side="left", padx=(10,10))
         self.npc_sheet_list = ctk.CTkComboBox(load_frame, values=["-"], state="readonly")
         self.npc_sheet_list.pack(side="left", padx=5, fill="x", expand=True)
+
+        # --- FIX: Bind left-click on the entire widget to open the dropdown ---
+        self.npc_sheet_list.bind("<Button-1>", lambda event: self.npc_sheet_list._open_dropdown_menu())
+        
         ctk.CTkButton(load_frame, text="Load", command=controller.load_npc_to_sheet).pack(side="left", padx=(10,10))
         
         self.sheet_content_frame = ctk.CTkFrame(container, fg_color="transparent")
         self.sheet_content_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
 
     def build_dynamic_fields(self, rule_set):
-        """Builds stat fields in the creator in a hidden container for smooth rendering."""
+        """Builds stat fields in the creator."""
         for widget in self.npc_creator_fields_frame.winfo_children():
             widget.destroy()
         self.npc_creator_entries.clear()
@@ -125,7 +126,7 @@ class NpcView:
         sheet_pane = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
         sheet_pane.grid(row=1, column=0, pady=10, sticky="nsew")
         sheet_pane.grid_columnconfigure(0, weight=1)
-        sheet_pane.grid_columnconfigure(1, weight=1) # Allow both columns to expand
+        sheet_pane.grid_columnconfigure(1, weight=1)
         sheet_pane.grid_rowconfigure(0, weight=1)
         
         stats_frame = ctk.CTkScrollableFrame(sheet_pane, label_text="Stats & Skills")
@@ -133,8 +134,8 @@ class NpcView:
         
         gm_pane = ctk.CTkFrame(sheet_pane, fg_color="transparent")
         gm_pane.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-        gm_pane.grid_rowconfigure(1, weight=1)
-        gm_pane.grid_rowconfigure(3, weight=1)
+        gm_pane.grid_rowconfigure(1, weight=1) # Notes expand
+        gm_pane.grid_rowconfigure(3, weight=1) # Inventory expand
         
         all_stat_keys = rule_set['attributes'] + list(rule_set['skills'].keys())
         for key in all_stat_keys:
@@ -151,10 +152,13 @@ class NpcView:
         self.sheet_notes_text.grid(row=1, column=0, sticky="nsew")
         self.sheet_notes_text.bind("<KeyRelease>", controller.mark_as_dirty)
 
-        ctk.CTkLabel(gm_pane, text="Loot", font=ctk.CTkFont(size=14, weight="bold")).grid(row=2, column=0, sticky="w", pady=(10,5))
-        self.sheet_loot_text = ctk.CTkTextbox(gm_pane)
-        self.sheet_loot_text.grid(row=3, column=0, sticky="nsew")
-        self.sheet_loot_text.bind("<KeyRelease>", controller.mark_as_dirty)
+        inv_header_frame = ctk.CTkFrame(gm_pane, fg_color="transparent")
+        inv_header_frame.grid(row=2, column=0, sticky="ew", pady=(10,5))
+        ctk.CTkLabel(inv_header_frame, text="Inventory / Loot", font=ctk.CTkFont(size=14, weight="bold")).pack(side="left")
+        ctk.CTkButton(inv_header_frame, text="Add Item", width=80, command=controller.show_add_item_dialog).pack(side="right")
+
+        self.inventory_list_frame = ctk.CTkScrollableFrame(gm_pane)
+        self.inventory_list_frame.grid(row=3, column=0, sticky="nsew")
 
         button_frame = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
         button_frame.grid(row=2, column=0, pady=20)
@@ -163,27 +167,73 @@ class NpcView:
         
         self.sheet_is_built = True
 
-    def display_sheet_data(self, npc):
-        """Populates the existing UI with new data instead of rebuilding it."""
+    def display_sheet_data(self, npc, item_controller):
+        """Populates the existing UI with new data, including calculated stats."""
         if not self.sheet_is_built: return
 
         self.sheet_name_label.configure(text=npc.name)
         
+        all_items_data = {item['id']: item for item in item_controller.all_items}
+        effective_attrs = npc.attributes.copy()
+        for inv_entry in npc.inventory:
+            if inv_entry.get("equipped", False):
+                item_id = inv_entry["item_id"]
+                if item_id in all_items_data:
+                    item_details = all_items_data[item_id]
+                    for modifier in item_details.get("modifiers", []):
+                        stat = modifier["stat"]
+                        value = modifier["value"]
+                        if stat in effective_attrs:
+                            current_val = int(effective_attrs.get(stat, 0))
+                            effective_attrs[stat] = str(current_val + value)
+
         for key, entry in self.npc_sheet_entries.items():
             entry.delete(0, 'end')
-            value = npc.attributes.get(key) or npc.skills.get(key) or ""
-            entry.insert(0, value)
+            base_value = npc.attributes.get(key) or npc.skills.get(key) or ""
+            effective_value = effective_attrs.get(key)
+            
+            display_text = base_value
+            if effective_value and effective_value != base_value:
+                 display_text = f"{effective_value} ({base_value})"
+            
+            entry.insert(0, display_text)
 
         self.sheet_notes_text.delete("1.0", "end")
         self.sheet_notes_text.insert("1.0", npc.gm_notes)
         
-        self.sheet_loot_text.delete("1.0", "end")
-        self.sheet_loot_text.insert("1.0", "\n".join(npc.loot))
-        
+        self.display_inventory(npc.inventory, item_controller)
         self.sheet_content_wrapper.pack(fill="both", expand=True)
 
+    def display_inventory(self, inventory_list, item_controller):
+        """Renders the NPC's inventory in the UI."""
+        for widget in self.inventory_list_frame.winfo_children():
+            widget.destroy()
+
+        all_items_data = {item['id']: item for item in item_controller.all_items}
+        controller = item_controller.app_controller.npc_controller
+
+        for inv_entry in inventory_list:
+            item_id = inv_entry["item_id"]
+            if item_id in all_items_data:
+                item_details = all_items_data[item_id]
+                item_row = ctk.CTkFrame(self.inventory_list_frame)
+                item_row.pack(fill="x", pady=2)
+                
+                equip_checkbox = ctk.CTkCheckBox(item_row, text="", width=20,
+                                                 command=lambda i=inv_entry: controller.toggle_item_equipped(i))
+                equip_checkbox.pack(side="left", padx=5)
+                if inv_entry.get("equipped", False):
+                    equip_checkbox.select()
+                else:
+                    equip_checkbox.deselect()
+
+                label_text = f'{item_details["name"]} (x{inv_entry["quantity"]})'
+                ctk.CTkLabel(item_row, text=label_text, anchor="w").pack(side="left", expand=True, fill="x")
+                ctk.CTkButton(item_row, text="X", width=25, height=25, fg_color="#D2691E", hover_color="#B2590E",
+                              command=lambda i=inv_entry: controller.remove_item_from_inventory(i)).pack(side="right", padx=5)
+
     def clear_sheet(self):
-        """Hides the main content wrapper instead of destroying widgets."""
+        """Hides the main content wrapper."""
         if hasattr(self, 'sheet_content_wrapper'):
             self.sheet_content_wrapper.pack_forget()
 
@@ -198,7 +248,7 @@ class NpcView:
         
     def update_npc_sheet_list(self, npcs):
         """Refreshes the dropdown list of NPCs on the sheet tab."""
-        npcs = npcs or ["-"]
+        npcs = ["-"] + npcs if npcs else ["-"]
         self.npc_sheet_list.configure(values=npcs)
         self.npc_sheet_list.set(npcs[0])
 
