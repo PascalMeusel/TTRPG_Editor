@@ -3,10 +3,11 @@ from .item_view import ItemView
 from custom_dialogs import MessageBox
 
 class ItemController:
-    def __init__(self, app_controller, view_frame, campaign_path):
+    """Controller for the self-contained Item feature."""
+    def __init__(self, app_controller, parent_frame, campaign_path):
         self.app_controller = app_controller
         self.model = ItemModel(campaign_path)
-        self.view = ItemView(view_frame)
+        self.view = ItemView(parent_frame)
         self.view.setup_ui(self)
 
         self.all_items = []
@@ -44,7 +45,7 @@ class ItemController:
         """Reads all non-zero modifier values from the dynamic UI."""
         modifiers = []
         if not self.current_rule_set:
-            return modifiers # Should not happen in normal flow
+            return modifiers
 
         for stat_name, value_label in self.view.modifier_widgets.items():
             value = int(value_label.cget("text"))
@@ -59,7 +60,7 @@ class ItemController:
         item_type = self.view.type_combo.get()
 
         if not name:
-            MessageBox.showerror("Error", "Item name is required.", parent=self.view.frame)
+            MessageBox.showerror("Error", "Item name is required.", parent=self.view.parent_frame)
             return
 
         modifiers = self._get_modifiers_from_view()
@@ -68,7 +69,21 @@ class ItemController:
         self.all_items.append(new_item)
         self.model.save_all_items(self.all_items)
         self.load_all_items()
-        MessageBox.showinfo("Success", f"Item '{name}' created.", parent=self.view.frame)
+        MessageBox.showinfo("Success", f"Item '{name}' created.", parent=self.view.parent_frame)
+
+    def create_item_from_data(self, item_data):
+        """Creates a new item from a dictionary, used by generators."""
+        new_item = self.model.create_item(
+            item_data["name"],
+            item_data["description"],
+            item_data["type"],
+            item_data["modifiers"]
+        )
+        self.all_items.append(new_item)
+        self.model.save_all_items(self.all_items)
+        # Note: We don't call load_all_items() here to avoid multiple UI refreshes
+        # The calling function (NPC controller) will handle the final UI refresh.
+        return new_item
 
     def save_changes(self):
         """Saves changes to an existing, selected item."""
@@ -80,7 +95,7 @@ class ItemController:
         new_type = self.view.type_combo.get()
 
         if not new_name:
-            MessageBox.showerror("Error", "Item name is required.", parent=self.view.frame)
+            MessageBox.showerror("Error", "Item name is required.", parent=self.view.parent_frame)
             return
             
         modifiers = self._get_modifiers_from_view()
@@ -95,18 +110,18 @@ class ItemController:
         
         self.model.save_all_items(self.all_items)
         self.load_all_items()
-        MessageBox.showinfo("Success", f"Item '{new_name}' updated.", parent=self.view.frame)
+        MessageBox.showinfo("Success", f"Item '{new_name}' updated.", parent=self.view.parent_frame)
 
     def delete_item(self):
         """Deletes the currently selected item."""
         if not self.selected_item:
             return
             
-        if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete '{self.selected_item['name']}'?", parent=self.view.frame):
+        if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete '{self.selected_item['name']}'?", parent=self.view.parent_frame):
             self.all_items = [item for item in self.all_items if item["id"] != self.selected_item["id"]]
             self.model.save_all_items(self.all_items)
             self.load_all_items()
-            MessageBox.showinfo("Deleted", "Item has been deleted.", parent=self.view.frame)
+            MessageBox.showinfo("Deleted", "Item has been deleted.", parent=self.view.parent_frame)
 
     def clear_editor_fields(self):
         """Clears the selection and the editor fields."""

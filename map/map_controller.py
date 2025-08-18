@@ -3,14 +3,17 @@ from .map_model import MapModel
 from .map_view import MapView
 from .map_generation.map_generation_controller import MapGenerationController
 from custom_dialogs import MessageBox
+# --- FIX: Corrected import paths from project root ---
+from character.character_controller import CharacterController
+from npc.npc_controller import NpcController
 import math
 import os
 
 class MapController:
-    """Controller for all map interactions, supporting multiple levels."""
-    def __init__(self, app_controller, editor_tab, viewer_tab, campaign_path):
+    """Controller for the self-contained Map feature."""
+    def __init__(self, app_controller, parent_frame, campaign_path):
         self.app_controller = app_controller
-        self.view = MapView(editor_tab, viewer_tab)
+        self.view = MapView(parent_frame)
         self.campaign_path = campaign_path
         self.model = None
         self.current_level = 0
@@ -20,11 +23,8 @@ class MapController:
         self.token_being_dragged = None
         self.drag_start_pos = {}
         self.drag_preview_pos = None
-        self.char_controller = None
-        self.npc_controller = None
 
-        self.view.setup_editor_ui(self)
-        self.view.setup_viewer_ui(self)
+        self.view.setup_ui(self)
         self._initialize_blank_state()
 
     def _initialize_blank_state(self):
@@ -33,17 +33,22 @@ class MapController:
         self.current_level = 0
         self.selected_tokens = []
         self.view.clear_all_canvases()
-        self.view.map_name_entry.delete(0, 'end')
+        if hasattr(self.view, 'map_name_entry'):
+            self.view.map_name_entry.delete(0, 'end')
         self.view.update_level_controls(None, 0)
         self.refresh_map_list()
+
+    def handle_rule_set_load(self, rule_set):
+        """Called when the editor loads to populate the token list."""
+        self.update_token_placer_list()
 
     def show_new_map_dialog(self):
         """Opens the new map generation dialog and loads the resulting data."""
         if self.model and self.app_controller.unsaved_changes:
-            if not MessageBox.askyesno("Unsaved Changes", "This will erase the current unsaved map design. Are you sure?", parent=self.view.editor_tab):
+            if not MessageBox.askyesno("Unsaved Changes", "This will erase the current unsaved map design. Are you sure?", self.view.parent_frame):
                 return
 
-        gen_controller = MapGenerationController(parent_view=self.view.editor_tab)
+        gen_controller = MapGenerationController(parent_view=self.view.parent_frame)
         map_data = gen_controller.show_generation_dialog()
 
         if map_data:
@@ -68,21 +73,21 @@ class MapController:
         self.view.update_dimension_fields(self.model)
         self.set_tool("select")
         
-        self._redraw_editor_view_only()
-        self.view.clear_viewer_canvas()
-        
+        self._sync_and_redraw_all_views()
         self.app_controller.set_dirty_flag(True)
 
     def change_level(self, delta):
         """Changes the currently viewed level by a delta (+1 or -1)."""
-        if not self.model: return
+        if not self.model or self.model.map_type != 'inside':
+            return
+            
         new_level = self.current_level + delta
         if new_level in self.model.levels:
             self.current_level = new_level
             self.selected_tokens = []
             self._sync_and_redraw_all_views()
         else:
-            if MessageBox.askyesno("Create New Level?", f"Level {new_level} does not exist. Would you like to create a new blank level?", parent=self.view.editor_tab):
+            if MessageBox.askyesno("Create New Level?", f"Level {new_level} does not exist. Would you like to create a new blank level?", self.view.parent_frame):
                 self.model.levels[new_level] = {'elements': [], 'tokens': []}
                 self.model.clear_map_level(new_level)
                 self.current_level = new_level
@@ -90,29 +95,33 @@ class MapController:
                 self._sync_and_redraw_all_views()
                 self.app_controller.set_dirty_flag(True)
 
-    def set_source_controllers(self, char_controller, npc_controller):
-        self.char_controller = char_controller
-        self.npc_controller = npc_controller
-
-    def handle_rule_set_load(self, rule_set):
-        self.update_token_placer_list()
-
     def update_token_placer_list(self):
-        if not self.char_controller or not self.npc_controller: return
-        pc_list = [f"PC: {name}" for name in self.char_controller.get_character_list()]
-        npc_list = [f"NPC: {name}" for name in self.npc_controller.get_npc_list()]
+        """Gathers PC and NPC names from other loaded controllers."""
+        char_controller = self.app_controller.get_loaded_controller(CharacterController)
+        npc_controller = self.app_controller.get_loaded_controller(NpcController)
+        
+        pc_list = []
+        npc_list = []
+
+        if char_controller and hasattr(char_controller, 'get_character_list'):
+            pc_list = [f"PC: {name}" for name in char_controller.get_character_list()]
+        if npc_controller and hasattr(npc_controller, 'get_npc_list'):
+            npc_list = [f"NPC: {name}" for name in npc_controller.get_npc_list()]
+            
         self.view.update_token_placer_list(pc_list + npc_list)
 
     def set_tool(self, tool_name):
         self.current_tool = tool_name
         if tool_name in ["brush", "rect"]:
             self.selected_tokens = []
-            self._redraw_viewer_canvas()
+            if self.model:
+                self._redraw_viewer_canvas()
 
     def on_editor_canvas_press(self, event):
         self.editor_start_pos = (event.x, event.y)
 
     def on_editor_canvas_drag(self, event):
+        if not self.model: return
         if self.current_tool == "brush":
             x, y = event.x // self.model.grid_size, event.y // self.model.grid_size
             self.model.add_element(
@@ -123,6 +132,7 @@ class MapController:
             self.app_controller.set_dirty_flag()
 
     def on_editor_canvas_release(self, event):
+        if not self.model: return
         if self.current_tool == "rect" and self.editor_start_pos:
             x0 = min(self.editor_start_pos[0], event.x) // self.model.grid_size
             y0 = min(self.editor_start_pos[1], event.y) // self.model.grid_size
@@ -147,7 +157,7 @@ class MapController:
                 self._redraw_viewer_canvas()
                 self.app_controller.set_dirty_flag()
             else:
-                MessageBox.showwarning("Warning", f"Token '{token_name}' is already on the map (possibly on another level).", self.view.viewer_tab)
+                MessageBox.showwarning("Warning", f"Token '{token_name}' is already on the map (possibly on another level).", self.view.parent_frame)
             self.set_tool("select")
             return
         
@@ -217,7 +227,6 @@ class MapController:
             self.view.distance_label.configure(text="-")
 
     def _sync_and_redraw_all_views(self):
-        """Redraws both the editor and viewer to be in sync. Use when loading a saved map."""
         if not self.model: return
         self.view.update_level_controls(self.model, self.current_level)
         self.view.draw_editor_canvas(self.model, self.current_level)
@@ -225,78 +234,64 @@ class MapController:
         self.view.draw_viewer_canvas(self.model, self)
 
     def _redraw_editor_view_only(self):
-        """Redraws only the editor canvas and its controls."""
         if not self.model: return
         self.view.update_level_controls(self.model, self.current_level)
         self.view.draw_editor_canvas(self.model, self.current_level)
         
     def _redraw_viewer_canvas(self):
-        """Redraws only the viewer tokens and overlays."""
         if not self.model: return
         self.view.draw_viewer_canvas(self.model, self)
 
     def save_map(self):
         if not self.model:
-            MessageBox.showerror("Error", "There is no map to save.", self.view.editor_tab)
+            MessageBox.showerror("Error", "There is no map to save.", self.view.parent_frame)
             return
-
         map_name = self.view.map_name_entry.get()
         if not map_name or map_name == "New Generated Map":
-            MessageBox.showerror("Error", "Please enter a unique name for the map.", self.view.editor_tab)
+            MessageBox.showerror("Error", "Please enter a unique name for the map.", self.view.parent_frame)
             return
-        
         self.model.name = map_name
         try:
             self.model.grid_scale = float(self.view.scale_entry.get())
         except ValueError:
-            MessageBox.showerror("Error", "Invalid grid scale.", self.view.editor_tab)
+            MessageBox.showerror("Error", "Invalid grid scale.", self.view.parent_frame)
             return
-
         self.model.save_map_data()
-        
         png_path = os.path.join(self.model.maps_dir, f"{self.model.name.lower().replace(' ', '_')}.png")
         if not self.view.save_canvas_to_png(png_path, self.model, self.current_level):
-            MessageBox.showerror("Error", "Failed to save map image.", self.view.editor_tab)
+            MessageBox.showerror("Error", "Failed to save map image.", self.view.parent_frame)
             return
-            
         self.app_controller.set_dirty_flag(False)
         self.refresh_map_list()
-        MessageBox.showinfo("Success", f"Map '{self.model.name}' has been saved.", self.view.editor_tab)
+        MessageBox.showinfo("Success", f"Map '{self.model.name}' has been saved.", self.view.parent_frame)
 
     def refresh_map_list(self):
         maps = MapModel.get_all_maps(self.campaign_path)
         self.view.update_map_list(maps)
         
     def load_map_for_viewing(self, map_name):
-        """This is the primary function for loading a map into the viewer."""
         if "Select a saved map..." in map_name:
             self._initialize_blank_state()
             return
-            
         loaded_model = MapModel.load(self.campaign_path, map_name)
         if loaded_model:
             self.model = loaded_model
             self.current_level = 0
             self.selected_tokens = []
-
             self.view.map_name_entry.delete(0, 'end')
             self.view.map_name_entry.insert(0, self.model.name)
             self.view.update_dimension_fields(self.model)
             self.set_tool("select")
-            
-            # --- FIX: Changed the call to the correct redraw function ---
             self._sync_and_redraw_all_views()
-            
             self.app_controller.set_dirty_flag(False)
         else:
-            MessageBox.showerror("Error", f"Could not load map data for '{map_name}'.", self.view.viewer_tab)
+            MessageBox.showerror("Error", f"Could not load map data for '{map_name}'.", self.view.parent_frame)
 
     def delete_selected_tokens(self):
         if not self.selected_tokens:
-            MessageBox.showinfo("Info", "No tokens selected to delete.", self.view.viewer_tab)
+            MessageBox.showinfo("Info", "No tokens selected to delete.", self.view.parent_frame)
             return
-
-        if MessageBox.askyesno("Confirm", f"Are you sure you want to delete {len(self.selected_tokens)} token(s)?", self.view.viewer_tab):
+        if MessageBox.askyesno("Confirm", f"Are you sure you want to delete {len(self.selected_tokens)} token(s)?", self.view.parent_frame):
             for token in self.selected_tokens:
                 self.model.delete_token(token['name'], self.current_level)
             self.selected_tokens = []

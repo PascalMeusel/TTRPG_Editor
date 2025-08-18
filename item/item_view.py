@@ -1,17 +1,17 @@
 import customtkinter as ctk
 
 class ItemView:
-    """Manages the UI for the Item Editor page."""
+    """Manages the UI for the self-contained Item feature."""
     def __init__(self, parent_frame):
-        self.frame = parent_frame
-        self.modifier_widgets = {} # Holds the value labels for each stat
+        self.parent_frame = parent_frame
+        self.modifier_widgets = {}
 
-        self.frame.grid_columnconfigure(0, weight=1)
-        self.frame.grid_columnconfigure(1, weight=2)
-        self.frame.grid_rowconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(1, weight=2)
+        self.parent_frame.grid_rowconfigure(0, weight=1)
 
         # Left Pane: List of existing items
-        list_frame = ctk.CTkFrame(self.frame)
+        list_frame = ctk.CTkFrame(self.parent_frame)
         list_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         list_frame.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(list_frame, text="Campaign Items", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=10, pady=10)
@@ -19,10 +19,10 @@ class ItemView:
         self.item_list_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
         # Right Pane: Editor for creating/editing an item
-        editor_frame = ctk.CTkFrame(self.frame)
+        editor_frame = ctk.CTkFrame(self.parent_frame)
         editor_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         editor_frame.grid_columnconfigure(0, weight=1)
-        editor_frame.grid_rowconfigure(4, weight=1) # Allow modifier frame to expand
+        editor_frame.grid_rowconfigure(4, weight=1)
         
         self.editor_label = ctk.CTkLabel(editor_frame, text="Create New Item", font=ctk.CTkFont(size=16, weight="bold"))
         self.editor_label.grid(row=0, column=0, pady=10, padx=10)
@@ -40,7 +40,6 @@ class ItemView:
         self.desc_textbox = ctk.CTkTextbox(editor_frame, height=100)
         self.desc_textbox.grid(row=3, column=0, sticky="ew", padx=10, pady=(0, 10), columnspan=2)
 
-        # --- NEW: Dynamic Stat Modifier Section ---
         self.modifier_list_frame = ctk.CTkScrollableFrame(editor_frame, label_text="Stat Modifiers (Optional)")
         self.modifier_list_frame.grid(row=4, column=0, sticky="nsew", padx=10, pady=5)
 
@@ -94,7 +93,7 @@ class ItemView:
 
     def populate_editor(self, item):
         """Fills the editor fields with the data of the selected item."""
-        self.clear_modifiers() # Reset modifiers before populating
+        self.clear_modifiers()
         self.name_entry.delete(0, 'end')
         self.name_entry.insert(0, item["name"])
         self.type_combo.set(item["type"])
