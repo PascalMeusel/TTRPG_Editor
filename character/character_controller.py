@@ -5,7 +5,6 @@ from custom_dialogs import MessageBox
 from item.item_controller import ItemController
 
 class CharacterController:
-    # ... (init and other methods are unchanged) ...
     def __init__(self, app_controller, parent_frame, campaign_path):
         self.app_controller = app_controller
         self.view = CharacterView(parent_frame)
@@ -13,17 +12,21 @@ class CharacterController:
         self.current_rule_set = None
         self.current_character = None
         self.view.setup_ui(self)
+
     def get_item_controller(self):
         return self.app_controller.get_loaded_controller(ItemController)
+
     def get_character_list(self):
         if self.current_rule_set:
             return CharacterModel.get_for_ruleset(self.campaign_path, self.current_rule_set['name'])
         return []
+
     def handle_rule_set_load(self, rule_set):
         self.current_rule_set = rule_set
         self.view.build_dynamic_fields(rule_set)
         self.view.build_sheet_ui(rule_set, self)
         self.update_character_sheet_list()
+
     def update_character_sheet_list(self):
         if self.current_rule_set:
             characters = self.get_character_list()
@@ -32,6 +35,7 @@ class CharacterController:
             self.view.update_character_list([])
         self.view.clear_sheet()
         self.current_character = None
+
     def save_new_character(self):
         if not self.current_rule_set:
             MessageBox.showerror("Error", "No rule set loaded.", self.view.parent_frame)
@@ -47,6 +51,10 @@ class CharacterController:
                 char.set_attribute(key, value)
             elif key in self.current_rule_set['skills']:
                 char.set_skill(key, value)
+        
+        # Set current HP to max HP on creation
+        char.current_hp = char.attributes.get("Hit Points", "10")
+        
         char.save()
         MessageBox.showinfo("Success", f"Character '{name}' saved.", self.view.parent_frame)
         self.app_controller.on_character_or_npc_list_changed()
@@ -54,12 +62,12 @@ class CharacterController:
         for entry in self.view.char_creator_entries.values():
             entry.delete(0, 'end')
 
-    def load_character_to_sheet(self):
+    def load_character_to_sheet(self, refresh=False):
         item_controller = self.get_item_controller()
         if not item_controller:
-            MessageBox.showerror("Error", "The Item Editor must be open in one of the panes to manage inventory.", self.view.parent_frame)
+            MessageBox.showerror("Error", "The Item Editor must be open to manage inventory.", self.view.parent_frame)
             return
-        char_name = self.view.char_sheet_list.get()
+        char_name = self.current_character.name if (refresh and self.current_character) else self.view.char_sheet_list.get().strip()
         if not char_name or char_name == "-":
             self.current_character = None
             self.view.clear_sheet()
@@ -68,13 +76,17 @@ class CharacterController:
         if not self.current_character:
             MessageBox.showerror("Error", f"Could not load character: {char_name}", self.view.parent_frame)
             return
-        
-        # --- FIX: Pass the controller instance (self) to the view ---
         self.view.display_sheet_data(self.current_character, item_controller, self)
-        self.app_controller.set_dirty_flag(False)
+        if not refresh:
+            self.app_controller.set_dirty_flag(False)
 
     def save_character_sheet(self):
         if not self.current_character: return
+        
+        # Save current HP
+        self.current_character.current_hp = self.view.current_hp_entry.get()
+        
+        # Save other stats
         for key, entry in self.view.char_sheet_entries.items():
             full_value = entry.get()
             if "(" in full_value and full_value.endswith(")"):
@@ -83,8 +95,9 @@ class CharacterController:
                 base_value = full_value
             if key in self.current_character.attributes:
                 self.current_character.set_attribute(key, base_value)
-            else:
+            elif key in self.current_character.skills:
                 self.current_character.set_skill(key, base_value)
+        
         self.current_character.save()
         self.app_controller.set_dirty_flag(False)
         MessageBox.showinfo("Success", f"Changes to '{self.current_character.name}' saved.", self.view.parent_frame)
@@ -106,7 +119,7 @@ class CharacterController:
         if not self.current_character: return
         item_controller = self.get_item_controller()
         if not item_controller:
-            MessageBox.showerror("Error", "The Item Editor must be open in one of the panes to add items.", self.view.parent_frame)
+            MessageBox.showerror("Error", "The Item Editor must be open to add items.", self.view.parent_frame)
             return
         dialog = AddItemDialog(parent=self.view.parent_frame, all_items=item_controller.all_items)
         selected_item = dialog.get_selection()

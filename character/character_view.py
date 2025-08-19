@@ -2,7 +2,7 @@ import customtkinter as ctk
 from ui_extensions import AutoWidthComboBox
 
 class AddItemDialog(ctk.CTkToplevel):
-    # ... (This class is correct and unchanged)
+    """A reusable modal dialog for adding an item from a master list."""
     def __init__(self, parent, all_items):
         super().__init__(parent)
         self.title("Add Item to Inventory")
@@ -29,6 +29,7 @@ class AddItemDialog(ctk.CTkToplevel):
         self.update_idletasks()
         self.grab_set()
         self.wait_window()
+
     def _select(self, item):
         self.selected_item = item
         self.confirm_button.configure(state="normal")
@@ -37,17 +38,21 @@ class AddItemDialog(ctk.CTkToplevel):
                 btn.configure(fg_color="#3B8ED0", border_color="#3B8ED0")
             else:
                 btn.configure(fg_color="transparent", border_color="gray50")
+
     def _on_confirm(self):
         self.grab_release()
         self.destroy()
+
     def _on_cancel(self):
         self.selected_item = None
         self.grab_release()
         self.destroy()
+
     def get_selection(self):
         return self.selected_item
 
 class CharacterView:
+    """Manages the UI for the Character feature, now with its own TabView."""
     def __init__(self, parent_frame):
         self.parent_frame = parent_frame
         self.tab_view = ctk.CTkTabview(parent_frame, fg_color="transparent")
@@ -124,8 +129,24 @@ class CharacterView:
         self.sheet_content_wrapper.grid_rowconfigure(1, weight=1)
         self.sheet_name_label = ctk.CTkLabel(self.sheet_content_wrapper, text="", font=ctk.CTkFont(size=20, weight="bold"))
         self.sheet_name_label.grid(row=0, column=0, columnspan=2, pady=5, padx=10, sticky="w")
+        
         stats_frame = ctk.CTkScrollableFrame(self.sheet_content_wrapper, label_text="Stats & Skills")
         stats_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+        
+        # Dedicated HP section at the top of the stats list
+        hp_frame = ctk.CTkFrame(stats_frame, fg_color="gray20")
+        hp_frame.pack(fill="x", padx=5, pady=5)
+        hp_frame.grid_columnconfigure(1, weight=1)
+        
+        ctk.CTkLabel(hp_frame, text="Current HP:", anchor="w").grid(row=0, column=0, padx=5, pady=2)
+        self.current_hp_entry = ctk.CTkEntry(hp_frame)
+        self.current_hp_entry.grid(row=0, column=1, sticky="ew", padx=5, pady=2)
+        self.current_hp_entry.bind("<KeyRelease>", controller.mark_as_dirty)
+        
+        ctk.CTkLabel(hp_frame, text="Max HP:", anchor="w").grid(row=1, column=0, padx=5, pady=2)
+        self.max_hp_label = ctk.CTkLabel(hp_frame, text="10", anchor="w")
+        self.max_hp_label.grid(row=1, column=1, sticky="w", padx=5, pady=2)
+
         inv_frame = ctk.CTkFrame(self.sheet_content_wrapper)
         inv_frame.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
         inv_frame.grid_columnconfigure(0, weight=1)
@@ -136,8 +157,10 @@ class CharacterView:
         ctk.CTkButton(inv_header_frame, text="Add Item", width=80, command=controller.show_add_item_dialog).pack(side="right")
         self.inventory_list_frame = ctk.CTkScrollableFrame(inv_frame)
         self.inventory_list_frame.grid(row=1, column=0, sticky="nsew")
+        
         all_stat_keys = rule_set['attributes'] + list(rule_set['skills'].keys())
         for key in all_stat_keys:
+            if key == "Hit Points": continue # Skip, handled above
             frame = ctk.CTkFrame(stats_frame, fg_color="transparent")
             frame.pack(fill="x", padx=5, pady=4)
             ctk.CTkLabel(frame, text=key, width=150, anchor="w").pack(side="left")
@@ -145,6 +168,7 @@ class CharacterView:
             entry.pack(side="left", fill="x", expand=True)
             self.char_sheet_entries[key] = entry
             entry.bind("<KeyRelease>", controller.mark_as_dirty)
+
         button_frame = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
         button_frame.grid(row=2, column=0, columnspan=2, pady=10)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_character_sheet).pack(side="left", padx=10)
@@ -154,8 +178,10 @@ class CharacterView:
     def display_sheet_data(self, character, item_controller, char_controller):
         if not self.sheet_is_built: return
         self.sheet_name_label.configure(text=character.name)
+        
         all_items_data = {item['id']: item for item in item_controller.all_items}
         effective_attrs = character.attributes.copy()
+        
         for inv_entry in character.inventory:
             if inv_entry.get("equipped", False):
                 item_id = inv_entry["item_id"]
@@ -165,16 +191,31 @@ class CharacterView:
                         stat = modifier["stat"]
                         value = modifier["value"]
                         if stat in effective_attrs:
-                            current_val = int(effective_attrs.get(stat, 0))
-                            effective_attrs[stat] = str(current_val + value)
+                            try:
+                                current_val = int(effective_attrs.get(stat, 0))
+                                effective_attrs[stat] = str(current_val + value)
+                            except ValueError: pass # Ignore non-integer stats
+        
+        base_max_hp_str = character.attributes.get("Hit Points", "10")
+        effective_max_hp_str = effective_attrs.get("Hit Points", base_max_hp_str)
+        
+        hp_display_text = base_max_hp_str
+        if effective_max_hp_str != base_max_hp_str:
+            hp_display_text = f"{effective_max_hp_str} ({base_max_hp_str})"
+        self.max_hp_label.configure(text=hp_display_text)
+        
+        self.current_hp_entry.delete(0, 'end')
+        self.current_hp_entry.insert(0, str(character.current_hp))
+        
         for key, entry in self.char_sheet_entries.items():
-            entry.delete(0, 'end')
             base_value = character.attributes.get(key) or character.skills.get(key) or ""
             effective_value = effective_attrs.get(key)
             display_text = base_value
             if effective_value and effective_value != base_value:
                  display_text = f"{effective_value} ({base_value})"
+            entry.delete(0, 'end')
             entry.insert(0, display_text)
+            
         self.display_inventory(character.inventory, item_controller, char_controller)
         self.sheet_content_wrapper.pack(fill="both", expand=True)
 
@@ -206,7 +247,6 @@ class CharacterView:
             self.sheet_content_wrapper.pack_forget()
 
     def update_character_list(self, characters):
-        """Updates the dropdown list of characters on the sheet tab."""
         values = ["-"] + (characters or [])
         self.char_sheet_list.configure(values=values)
         self.char_sheet_list.set(values[0])

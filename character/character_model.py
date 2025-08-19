@@ -2,14 +2,15 @@ import json
 import os
 
 class CharacterModel:
-    """Model for managing character data within a specific campaign."""
     def __init__(self, campaign_path, name, rule_set_name):
         self.campaign_path = campaign_path
         self.name = name
         self.rule_set_name = rule_set_name
         self.attributes = {}
         self.skills = {}
-        self.inventory = [] # e.g., [{"item_id": "...", "quantity": 1, "equipped": False}]
+        self.inventory = []
+        # --- NEW: Explicitly track current HP ---
+        self.current_hp = None 
         self.data_dir = os.path.join(self.campaign_path, 'characters')
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
@@ -18,24 +19,29 @@ class CharacterModel:
     def set_skill(self, skill, value): self.skills[skill] = value
 
     def to_dict(self):
+        # Ensure current_hp is set before saving
+        if self.current_hp is None:
+            self.current_hp = self.attributes.get("Hit Points", "10")
         return {
             'name': self.name, 'rule_set': self.rule_set_name, 
-            'attributes': self.attributes, 'skills': self.skills, 'inventory': self.inventory
+            'attributes': self.attributes, 'skills': self.skills, 'inventory': self.inventory,
+            'current_hp': self.current_hp
         }
 
     @classmethod
     def from_dict(cls, campaign_path, data):
-        """Creates a CharacterModel instance from a dictionary."""
         char = cls(campaign_path, data['name'], data['rule_set'])
         char.attributes = data.get('attributes', {})
         char.skills = data.get('skills', {})
         
         inventory_data = data.get('inventory', [])
-        # --- FIX: Ensure backward compatibility for saves without the 'equipped' key ---
         for item_entry in inventory_data:
-            if 'equipped' not in item_entry:
-                item_entry['equipped'] = False # Default to not equipped
+            if 'equipped' not in item_entry: item_entry['equipped'] = False
         char.inventory = inventory_data
+
+        # --- FIX: Load current_hp, defaulting to Max HP if not found ---
+        max_hp = char.attributes.get("Hit Points", "10")
+        char.current_hp = data.get('current_hp', max_hp)
 
         return char
 

@@ -1,87 +1,124 @@
 import customtkinter as ctk
 
 class CombatView:
-    """
-    Manages the UI for the Combat Simulator tab.
-    Its primary responsibility is to build the simulator interface once a rule set is loaded.
-    """
-    def __init__(self, tab_frame):
-        self.tab_frame = tab_frame
+    """Manages the UI for the new Combat Tracker feature."""
+    def __init__(self, parent_frame):
+        self.frame = parent_frame
+        self.roster_buttons = {}
+        
+        self.frame.grid_columnconfigure(0, weight=1)
+        self.frame.grid_rowconfigure(0, weight=1)
 
     def setup_ui(self, controller):
-        """Sets up the initial, static part of the UI."""
-        # --- REFINED LAYOUT: Main container now expands ---
-        container = ctk.CTkFrame(self.tab_frame, fg_color="transparent")
-        container.pack(fill="both", expand=True)
-        container.grid_columnconfigure(0, weight=1)
-        container.grid_rowconfigure(1, weight=1)
-        
-        ctk.CTkLabel(container, text="Combat Assistant", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, pady=20)
+        """Builds the initial UI layout."""
+        self.main_pane = ctk.CTkFrame(self.frame, fg_color="transparent")
+        self.main_pane.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
+        self.main_pane.grid_columnconfigure(0, weight=1)
+        self.main_pane.grid_columnconfigure(1, weight=2)
+        self.main_pane.grid_rowconfigure(0, weight=1)
 
-        self.content_frame = ctk.CTkFrame(container, fg_color="transparent")
-        self.content_frame.grid(row=1, column=0, sticky="nsew", padx=20)
-        self.content_frame.grid_columnconfigure(0, weight=1)
-        
-        self.initial_label = ctk.CTkLabel(self.content_frame, text="Load a rule set to use the simulator.")
-        self.initial_label.pack(pady=20)
+        self.setup_pane = ctk.CTkFrame(self.main_pane)
+        self.setup_pane.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        self.setup_pane.grid_rowconfigure(1, weight=1)
+        self.setup_pane.grid_rowconfigure(3, weight=1)
 
-    def show_simulator(self, controller):
-        """Builds the full simulator UI smoothly after a rule set is loaded."""
-        for widget in self.content_frame.winfo_children():
+        ctk.CTkLabel(self.setup_pane, text="Available Combatants", font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, pady=5)
+        self.available_list = ctk.CTkScrollableFrame(self.setup_pane)
+        self.available_list.grid(row=1, column=0, sticky="nsew", padx=5)
+
+        ctk.CTkLabel(self.setup_pane, text="Encounter Roster", font=ctk.CTkFont(size=14, weight="bold")).grid(row=2, column=0, pady=5)
+        self.roster_list = ctk.CTkScrollableFrame(self.setup_pane)
+        self.roster_list.grid(row=3, column=0, sticky="nsew", padx=5)
+
+        ctk.CTkButton(self.setup_pane, text="Start Combat", command=controller.start_combat).grid(row=4, column=0, pady=10)
+
+        self.tracker_pane = ctk.CTkFrame(self.main_pane)
+        self.tracker_pane.grid_rowconfigure(0, weight=1)
+        self.tracker_pane.grid_columnconfigure(0, weight=1)
+
+        self.tracker_list = ctk.CTkScrollableFrame(self.tracker_pane, label_text="Turn Order")
+        self.tracker_list.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        
+        self.action_frame = ctk.CTkFrame(self.tracker_pane, fg_color="transparent")
+        self.action_frame.grid(row=1, column=0, sticky="ew", padx=5, pady=5)
+        
+        self.bottom_frame = ctk.CTkFrame(self.tracker_pane, fg_color="transparent")
+        self.bottom_frame.grid(row=2, column=0, sticky="ew", padx=5, pady=10)
+
+    def update_available_list(self, available_combatants, controller):
+        for widget in self.available_list.winfo_children():
+            widget.destroy()
+        
+        for model in available_combatants:
+            btn = ctk.CTkButton(self.available_list, text=f"+ {model.name}", anchor="w",
+                                command=lambda m=model: controller.add_to_roster(m))
+            btn.pack(fill="x", pady=2)
+
+    def update_roster_list(self, roster, controller):
+        for widget in self.roster_list.winfo_children():
+            widget.destroy()
+        
+        for combatant in roster.values():
+            btn = ctk.CTkButton(self.roster_list, text=f"- {combatant['name']}", anchor="w", fg_color="#D2691E",
+                                command=lambda cid=combatant['id']: controller.remove_from_roster(cid))
+            btn.pack(fill="x", pady=2)
+
+    def display_tracker(self, turn_order, combatants_data, current_turn_id, controller):
+        self.setup_pane.grid_forget()
+        self.tracker_pane.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        
+        for widget in self.tracker_list.winfo_children():
             widget.destroy()
 
-        container = ctk.CTkFrame(self.content_frame, fg_color="transparent")
-        
-        # --- REFINED LAYOUT: Wrapped in an outline frame ---
-        combatant_frame_wrapper = ctk.CTkFrame(container)
-        combatant_frame_wrapper.pack(fill="x", pady=5, padx=10, ipady=5)
-        combatant_frame = ctk.CTkFrame(combatant_frame_wrapper, fg_color="transparent")
-        combatant_frame.pack(fill="x", padx=10)
-        combatant_frame.grid_columnconfigure((0, 1), weight=1)
-        ctk.CTkLabel(combatant_frame, text="Attacker:").grid(row=0, column=0, padx=(0,10), sticky="w")
-        self.attacker_list = ctk.CTkComboBox(combatant_frame, state="readonly")
-        self.attacker_list.grid(row=1, column=0, padx=(0,10), sticky="ew")
-        ctk.CTkLabel(combatant_frame, text="Defender:").grid(row=0, column=1, padx=(10,0), sticky="w")
-        self.defender_list = ctk.CTkComboBox(combatant_frame, state="readonly")
-        self.defender_list.grid(row=1, column=1, padx=(10,0), sticky="ew")
+        for combatant_id in turn_order:
+            combatant = combatants_data[combatant_id]
+            is_current = (combatant_id == current_turn_id)
+            
+            row_color = "#3B8ED0" if is_current else "gray20"
+            row = ctk.CTkFrame(self.tracker_list, fg_color=row_color, corner_radius=5)
+            row.pack(fill="x", pady=3, padx=5)
+            row.grid_columnconfigure(1, weight=1)
+            
+            initiative_label = ctk.CTkLabel(row, text=f'{combatant["initiative"]}', font=ctk.CTkFont(size=16, weight="bold"), width=30)
+            initiative_label.grid(row=0, column=0, rowspan=2, padx=10, pady=5)
 
-        # --- REFINED LAYOUT: Wrapped in an outline frame ---
-        input_frame_wrapper = ctk.CTkFrame(container)
-        input_frame_wrapper.pack(fill="x", pady=10, padx=10, ipady=5)
-        input_frame = ctk.CTkFrame(input_frame_wrapper, fg_color="transparent")
-        input_frame.pack(fill="x", padx=10)
-        input_frame.grid_columnconfigure((0, 1), weight=1)
-        ctk.CTkLabel(input_frame, text="Dice Roll:").grid(row=0, column=0, padx=(0,10), sticky="w")
-        self.roll_entry = ctk.CTkEntry(input_frame)
-        self.roll_entry.grid(row=1, column=0, padx=(0,10), sticky="ew")
-        ctk.CTkLabel(input_frame, text="Modifier:").grid(row=0, column=1, padx=(10,0), sticky="w")
-        self.mod_entry = ctk.CTkEntry(input_frame)
-        self.mod_entry.grid(row=1, column=1, padx=(10,0), sticky="ew")
-        self.mod_entry.insert(0, "0")
+            name_label = ctk.CTkLabel(row, text=f'{combatant["name"]}', anchor="w", font=ctk.CTkFont(size=14, weight="bold"))
+            name_label.grid(row=0, column=1, sticky="w", padx=5)
 
-        action_frame = ctk.CTkFrame(container, fg_color="transparent")
-        action_frame.pack(pady=10)
-        ctk.CTkButton(action_frame, text="Calculate Hit", height=40, command=controller.run_combat_hit).pack(side="left", padx=10)
-        ctk.CTkButton(action_frame, text="Calculate Damage", height=40, command=controller.run_combat_damage).pack(side="left", padx=10)
+            hp_text = f'HP: {combatant["current_hp"]} / {combatant["max_hp"]}'
+            hp_label = ctk.CTkLabel(row, text=hp_text, anchor="w")
+            hp_label.grid(row=1, column=1, sticky="w", padx=5)
 
-        output_frame = ctk.CTkScrollableFrame(container, label_text="Result Log")
-        output_frame.pack(fill="both", expand=True, pady=10, padx=10)
-        self.output_text = ctk.CTkTextbox(output_frame, state="disabled", wrap="word", fg_color="transparent")
-        self.output_text.pack(fill="both", expand=True)
+            status_entry = ctk.CTkEntry(row, placeholder_text="Status Effects...")
+            status_entry.grid(row=0, column=2, rowspan=2, padx=10, pady=5, sticky="ew")
+            status_entry.insert(0, combatant["status"])
+            status_entry.bind("<FocusOut>", lambda event, cid=combatant_id, w=status_entry: controller.set_status(cid, w.get()))
 
-        container.pack(fill="both", expand=True)
+        self._display_actions(controller)
+        self._display_bottom_buttons(controller)
 
-    def update_combatant_lists(self, combatants):
-        """Populates the attacker and defender dropdowns with a list of names."""
-        combatants = combatants or ["-"]
-        self.attacker_list.configure(values=combatants)
-        self.defender_list.configure(values=combatants)
-        self.attacker_list.set(combatants[0])
-        self.defender_list.set(combatants[0])
+    def _display_actions(self, controller):
+        for widget in self.action_frame.winfo_children():
+            widget.destroy()
+        self.action_frame.grid_columnconfigure(1, weight=1)
 
-    def write_to_log(self, message):
-        """Appends a message to the combat log text box."""
-        self.output_text.configure(state="normal")
-        self.output_text.insert("end", message + "\n\n")
-        self.output_text.see("end")
-        self.output_text.configure(state="disabled")
+        ctk.CTkLabel(self.action_frame, text="Value:").grid(row=0, column=0, padx=5)
+        self.action_value_entry = ctk.CTkEntry(self.action_frame)
+        self.action_value_entry.grid(row=0, column=1, padx=5, sticky="ew")
+
+        ctk.CTkButton(self.action_frame, text="Apply Damage", command=controller.apply_damage).grid(row=0, column=2, padx=5)
+        ctk.CTkButton(self.action_frame, text="Apply Healing", command=controller.apply_healing).grid(row=0, column=3, padx=5)
+
+    def _display_bottom_buttons(self, controller):
+        for widget in self.bottom_frame.winfo_children():
+            widget.destroy()
+        ctk.CTkButton(self.bottom_frame, text="Next Turn >", command=controller.next_turn).pack(side="left", padx=10, pady=5)
+        ctk.CTkButton(self.bottom_frame, text="End Combat", command=controller.end_combat, fg_color="#D2691E").pack(side="right", padx=10, pady=5)
+
+    def clear_view(self):
+        """--- FIX: Resets the entire view to its initial setup state. ---"""
+        self.tracker_pane.grid_forget()
+        self.setup_pane.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
+        for w in self.tracker_list.winfo_children(): w.destroy()
+        for w in self.action_frame.winfo_children(): w.destroy()
+        for w in self.bottom_frame.winfo_children(): w.destroy()

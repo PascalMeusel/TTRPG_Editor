@@ -9,17 +9,23 @@ class NpcModel:
         self.rule_set_name = rule_set_name
         self.attributes = {}
         self.skills = {}
-        self.inventory = [] # e.g., [{"item_id": "...", "quantity": 1, "equipped": False}]
+        self.inventory = []
         self.gm_notes = ""
+        # NEW: Explicitly track current HP
+        self.current_hp = None
         self.data_dir = os.path.join(self.campaign_path, 'npcs')
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir)
 
     def to_dict(self):
         """Converts the NPC object to a dictionary for saving."""
+        # Ensure current_hp is set before saving
+        if self.current_hp is None:
+            self.current_hp = self.attributes.get("Hit Points", "10")
         return {
             'name': self.name, 'rule_set': self.rule_set_name, 'attributes': self.attributes,
-            'skills': self.skills, 'inventory': self.inventory, 'gm_notes': self.gm_notes
+            'skills': self.skills, 'inventory': self.inventory, 'gm_notes': self.gm_notes,
+            'current_hp': self.current_hp
         }
 
     @classmethod
@@ -31,15 +37,14 @@ class NpcModel:
         npc.gm_notes = data.get('gm_notes', "")
         
         inventory_data = data.get('inventory', [])
-        # Ensure backward compatibility for saves without the 'equipped' key
         for item_entry in inventory_data:
             if 'equipped' not in item_entry:
-                item_entry['equipped'] = False # Default to not equipped
+                item_entry['equipped'] = False
         npc.inventory = inventory_data
         
-        # Deprecate the old 'loot' field if it exists
-        if 'loot' in data:
-            print(f"Notice: Old 'loot' field detected for NPC '{data['name']}'. This is no longer used. Please manage items via the inventory.")
+        # Load current_hp, defaulting to Max HP if not found (for backward compatibility)
+        max_hp = npc.attributes.get("Hit Points", "10")
+        npc.current_hp = data.get('current_hp', max_hp)
 
         return npc
 

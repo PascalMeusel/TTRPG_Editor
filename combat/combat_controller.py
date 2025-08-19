@@ -1,75 +1,105 @@
-from tkinter import messagebox
 from .combat_model import CombatModel
 from .combat_view import CombatView
+from character.character_controller import CharacterController
+from npc.npc_controller import NpcController
 from character.character_model import CharacterModel
 from npc.npc_model import NpcModel
+from custom_dialogs import MessageBox
 
 class CombatController:
-    """Controller for the Combat Simulator feature within a specific campaign."""
-    def __init__(self, app_controller, tab_frame, campaign_path):
+    """Controller for the new Combat Tracker feature."""
+    def __init__(self, app_controller, parent_frame, campaign_path):
         self.app_controller = app_controller
         self.model = CombatModel()
-        self.view = CombatView(tab_frame)
-        self.campaign_path = campaign_path # Store the active campaign path
-        self.current_rule_set = None
+        self.view = CombatView(parent_frame)
         self.view.setup_ui(self)
+        self.campaign_path = campaign_path
+        self.current_rule_set = None
+        self.available_combatants = []
 
     def handle_rule_set_load(self, rule_set):
         self.current_rule_set = rule_set
-        self.view.show_simulator(self)
         self.update_combatant_lists()
 
     def update_combatant_lists(self):
         if not self.current_rule_set: return
+        self.available_combatants = []
         rule_set_name = self.current_rule_set['name']
-        
-        # Use the campaign path to get the correct characters and NPCs
-        chars = [f"PC: {name}" for name in CharacterModel.get_for_ruleset(self.campaign_path, rule_set_name)]
-        npcs = [f"NPC: {name}" for name in NpcModel.get_for_ruleset(self.campaign_path, rule_set_name)]
-        
-        combatants = sorted(chars + npcs)
-        self.view.update_combatant_lists(combatants)
+        char_names = CharacterModel.get_for_ruleset(self.campaign_path, rule_set_name)
+        for name in char_names:
+            char = CharacterModel.load(self.campaign_path, name)
+            if char: self.available_combatants.append(char)
+        npc_names = NpcModel.get_for_ruleset(self.campaign_path, rule_set_name)
+        for name in npc_names:
+            npc = NpcModel.load(self.campaign_path, name)
+            if npc: self.available_combatants.append(npc)
+        self.view.update_available_list(self.available_combatants, self)
 
-    def _get_combatant_from_selection(self, selection_str):
-        """Loads a Character or NPC model from the active campaign."""
-        if not selection_str or selection_str == "-": return None, "No combatant selected."
-        try:
-            c_type, c_name = selection_str.split(': ', 1)
-            if c_type == 'PC':
-                return (CharacterModel.load(self.campaign_path, c_name), None)
-            elif c_type == 'NPC':
-                return (NpcModel.load(self.campaign_path, c_name), None)
-            else:
-                return None, "Invalid combatant type."
-        except Exception as e:
-            return None, f"Error loading combatant: {e}"
+    def add_to_roster(self, base_model):
+        is_pc = isinstance(base_model, CharacterModel)
+        if is_pc:
+            for combatant in self.model.combatants.values():
+                if combatant['base_model'].name == base_model.name and combatant['is_pc']:
+                    MessageBox.showwarning("Warning", f"Player Character '{base_model.name}' is already in the encounter.", self.view.frame)
+                    return
+        self.model.add_combatant(base_model, is_pc)
+        self.view.update_roster_list(self.model.combatants, self)
 
-    def run_combat_hit(self):
-        attacker, err = self._get_combatant_from_selection(self.view.attacker_list.get())
-        if err: messagebox.showerror("Error", err); return
-        defender, err = self._get_combatant_from_selection(self.view.defender_list.get())
-        if err: messagebox.showerror("Error", err); return
-        
-        try:
-            roll = int(self.view.roll_entry.get())
-        except (ValueError, TypeError):
-            messagebox.showerror("Error", "Dice Roll must be a number."); return
+    def remove_from_roster(self, combatant_id):
+        self.model.remove_combatant(combatant_id)
+        self.view.update_roster_list(self.model.combatants, self)
+
+    def start_combat(self):
+        if not self.model.combatants:
+            MessageBox.showinfo("Info", "Add combatants to the roster before starting combat.", self.view.frame)
+            return
+        self.model.start_combat()
+        self._redraw_tracker()
+
+    def next_turn(self):
+        self.model.next_turn()
+        self._redraw_tracker()
+
+    def end_combat(self):
+        """Ends combat, saves FINAL CURRENT HP, and fully clears the roster."""
+        for combatant_data in self.model.combatants.values():
+            base_model = combatant_data['base_model']
+            final_hp = combatant_data['current_hp']
             
-        result_text, _ = self.model.check_hit(attacker, defender, roll, self.current_rule_set)
-        self.view.write_to_log(f"{attacker.name} attacks {defender.name} (Roll: {roll})...\n> {result_text}")
-
-    def run_combat_damage(self):
-        attacker, err = self._get_combatant_from_selection(self.view.attacker_list.get())
-        if err: messagebox.showerror("Error", err); return
-        defender, err = self._get_combatant_from_selection(self.view.defender_list.get())
-        if err: messagebox.showerror("Error", err); return
+            # --- FIX: ONLY update the 'current_hp' field. Do NOT touch 'Hit Points'. ---
+            base_model.current_hp = str(final_hp)
+            base_model.save()
         
+        self.model.reset_roster()
+        self.view.clear_view()
+        self.view.update_roster_list(self.model.combatants, self)
+        self.app_controller.refresh_char_npc_sheet_if_loaded()
+        MessageBox.showinfo("Combat Ended", "Combat has ended. Current Hit Points have been saved.", self.view.frame)
+
+    def apply_damage(self):
+        combatant = self.model.get_current_combatant()
+        if not combatant: return
         try:
-            roll = int(self.view.roll_entry.get())
-            modifier = int(self.view.mod_entry.get())
-        except (ValueError, TypeError):
-            messagebox.showerror("Error", "Dice Roll and Modifier must be numbers."); return
-            
-        result_text, _ = self.model.calculate_damage(attacker, defender, roll, modifier)
-        self.view.write_to_log(result_text)
-        self.view.write_to_log(f"--> Reminder: Manually update {defender.name}'s Hit Points on their sheet.")
+            amount = int(self.view.action_value_entry.get())
+            self.model.apply_damage(combatant['id'], amount)
+            self._redraw_tracker()
+        except (ValueError, TypeError): pass
+        self.view.action_value_entry.delete(0, 'end')
+
+    def apply_healing(self):
+        combatant = self.model.get_current_combatant()
+        if not combatant: return
+        try:
+            amount = int(self.view.action_value_entry.get())
+            self.model.apply_healing(combatant['id'], amount)
+            self._redraw_tracker()
+        except (ValueError, TypeError): pass
+        self.view.action_value_entry.delete(0, 'end')
+
+    def set_status(self, combatant_id, text):
+        self.model.set_status(combatant_id, text)
+
+    def _redraw_tracker(self):
+        current_combatant = self.model.get_current_combatant()
+        current_id = current_combatant['id'] if current_combatant else None
+        self.view.display_tracker(self.model.turn_order, self.model.combatants, current_id, self)

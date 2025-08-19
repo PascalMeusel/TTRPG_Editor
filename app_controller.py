@@ -90,12 +90,9 @@ class AppController:
             sidebar_frame = ctk.CTkFrame(self.editor_frame, width=200, corner_radius=0, border_width=1, border_color="gray25")
             sidebar_frame.grid(row=1, column=0, sticky="nsw")
             sidebar_frame.grid_rowconfigure(0, weight=1)
-
             self.main_content_area = ctk.CTkFrame(self.editor_frame, fg_color="transparent")
             self.main_content_area.grid(row=1, column=1, sticky="nsew")
-
             self.paned_window = tk.PanedWindow(self.main_content_area, orient=tk.HORIZONTAL, sashwidth=10, bg="#2B2B2B", bd=0, relief="raised", sashrelief=tk.RAISED)
-            
             self.left_pane_wrapper = ctk.CTkFrame(self.paned_window, fg_color="gray14", corner_radius=0, border_width=2, border_color="gray25")
             self.left_pane_wrapper.grid_columnconfigure(0, weight=1)
             self.left_pane_wrapper.grid_rowconfigure(1, weight=1)
@@ -108,7 +105,6 @@ class AppController:
             self.left_pin_button.pack(side="right", padx=5, pady=5)
             self.left_pane_frame = ctk.CTkFrame(self.left_pane_wrapper, fg_color="transparent")
             self.left_pane_frame.grid(row=1, column=0, sticky="nsew")
-
             self.right_pane_wrapper = ctk.CTkFrame(self.paned_window, fg_color="gray14", corner_radius=0, border_width=2, border_color="gray25")
             self.right_pane_wrapper.grid_columnconfigure(0, weight=1)
             self.right_pane_wrapper.grid_rowconfigure(1, weight=1)
@@ -121,10 +117,8 @@ class AppController:
             self.right_pin_button.pack(side="right", padx=5, pady=5)
             self.right_pane_frame = ctk.CTkFrame(self.right_pane_wrapper, fg_color="transparent")
             self.right_pane_frame.grid(row=1, column=0, sticky="nsew")
-
             self.fullscreen_map_frame = ctk.CTkFrame(self.main_content_area, fg_color="transparent")
             self.paned_window.pack(fill="both", expand=True)
-
             self.music_controller = MusicController(self, header_right)
             sidebar_nav_frame = ctk.CTkFrame(sidebar_frame, fg_color="transparent")
             sidebar_nav_frame.grid(row=0, column=0, sticky="new", padx=5, pady=5)
@@ -137,7 +131,6 @@ class AppController:
             ctk.CTkButton(sidebar_frame, text="< Back to Main Menu", command=self.confirm_exit_to_main_menu,
                           fg_color="transparent", border_width=1, border_color="gray50", height=40).grid(
                 row=1, column=0, sticky="sew", padx=10, pady=10)
-
             ruleset_name = self.campaign_model.get_campaign_ruleset(os.path.basename(self.current_campaign_path))
             if ruleset_name:
                 rules_model = RulesModel()
@@ -149,7 +142,6 @@ class AppController:
                     MessageBox.showerror("Error", f"Failed to load required ruleset '{ruleset_name}'.", self.root)
                     self.show_main_menu()
                     return
-            
             self.root.after(100, lambda: self.paned_window.sash_place(0, self.paned_window.winfo_width() // 2, 0))
             self.load_feature_into_pane("Characters", "left")
             self.load_feature_into_pane("Items", "right")
@@ -210,18 +202,15 @@ class AppController:
         if pane_target == "left": self.left_pane_content = None
         else: self.right_pane_content = None
 
-        # --- FIX: Caching logic with reparenting ---
+        # --- FIX: Robust Caching and Reparenting Logic ---
         if feature_name in self.feature_cache:
             cached_feature = self.feature_cache[feature_name]
             content = cached_feature['controller']
             feature_container = cached_feature['container']
             
-            # Check if the container needs to be moved to a new parent
-            if feature_container.master != target_frame:
-                feature_container.pack(in_=target_frame, fill="both", expand=True)
-            else:
-                # If it's already in the correct frame, just repack it to make it visible
-                feature_container.pack(fill="both", expand=True)
+            # This is the correct way to reparent a widget in Tkinter
+            feature_container.master = target_frame
+            feature_container.pack(fill="both", expand=True)
         else:
             feature_container = ctk.CTkFrame(target_frame, fg_color="transparent")
             feature_container.pack(fill="both", expand=True)
@@ -253,15 +242,14 @@ class AppController:
     def _enter_fullscreen_map_mode(self):
         self.pre_map_left_pane_feature = self.left_pane_feature_name
         self.pre_map_right_pane_feature = self.right_pane_feature_name
-
         self.paned_window.pack_forget()
         self.fullscreen_map_frame.pack(in_=self.main_content_area, fill="both", expand=True)
         self.is_map_fullscreen = True
-        
         map_content = self.feature_cache.get("Map Editor")
         if map_content:
             map_container = map_content['container']
-            map_container.pack(in_=self.fullscreen_map_frame, fill="both", expand=True)
+            map_container.master = self.fullscreen_map_frame
+            map_container.pack(fill="both", expand=True)
         else:
             map_container = ctk.CTkFrame(self.fullscreen_map_frame, fg_color="transparent")
             map_container.pack(fill="both", expand=True)
@@ -273,11 +261,9 @@ class AppController:
     def _exit_fullscreen_map_mode(self):
         if "Map Editor" in self.feature_cache:
             self.feature_cache["Map Editor"]['container'].pack_forget()
-        
         self.fullscreen_map_frame.pack_forget()
         self.paned_window.pack(fill="both", expand=True)
         self.is_map_fullscreen = False
-
         self.load_feature_into_pane(self.pre_map_left_pane_feature, "left")
         self.load_feature_into_pane(self.pre_map_right_pane_feature, "right")
 
@@ -340,6 +326,20 @@ class AppController:
         standalone_rules_controller = RulesController(self)
         standalone_rules_controller.set_view(ruleset_window)
         ruleset_window.set_controller(standalone_rules_controller)
+
+    # --- FIX: Add the missing method ---
+    def refresh_char_npc_sheet_if_loaded(self):
+        """
+        Finds loaded Character/NPC controllers and tells them to refresh their
+        currently displayed sheet, if any.
+        """
+        char_controller = self.get_loaded_controller(CharacterController)
+        if char_controller and char_controller.current_character:
+            char_controller.load_character_to_sheet(refresh=True)
+
+        npc_controller = self.get_loaded_controller(NpcController)
+        if npc_controller and npc_controller.current_npc:
+            npc_controller.load_npc_to_sheet(refresh=True)
 
     def show_placeholder_message(self):
         MessageBox.showinfo("Not Implemented", "This feature is not yet available.", self.root)
