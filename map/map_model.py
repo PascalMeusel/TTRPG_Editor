@@ -4,7 +4,7 @@ import random
 import math
 
 class MapModel:
-    """Manages map data, supporting multiple levels for 'inside' maps."""
+    """Manages map data, supporting multiple levels and landmarks."""
     def __init__(self, campaign_path, name="New Map", width=50, height=50, grid_size=20, grid_scale=1.5):
         self.campaign_path = campaign_path
         self.name = name
@@ -13,31 +13,37 @@ class MapModel:
         self.grid_size = grid_size
         self.grid_scale = grid_scale
         
-        # --- NEW: Core data structure for multi-level support ---
-        self.map_type = "outside" # 'outside' or 'inside'
-        self.levels = {0: {'elements': [], 'tokens': []}} # Level 0 is the default
+        self.map_type = "outside"
+        # --- NEW: Add a 'landmarks' list to each level ---
+        self.levels = {0: {'elements': [], 'tokens': [], 'landmarks': []}}
         
         self.maps_dir = os.path.join(self.campaign_path, 'maps')
         if not os.path.exists(self.maps_dir):
             os.makedirs(self.maps_dir)
 
     def clear_map_level(self, level_index=0):
-        """Clears all elements and tokens from a specific level."""
+        """Clears all elements, tokens, and landmarks from a specific level."""
         if level_index not in self.levels:
-            self.levels[level_index] = {'elements': [], 'tokens': []}
+            self.levels[level_index] = {'elements': [], 'tokens': [], 'landmarks': []}
         else:
             self.levels[level_index]['elements'].clear()
+            self.levels[level_index]['landmarks'].clear()
         
-        # Add a default background element for the cleared level
         self.add_element({'type': 'rect', 'coords': (0, 0, self.width, self.height), 'color': '#2B2B2B'}, level_index)
+
 
     def add_element(self, element, level_index=0):
         if level_index in self.levels:
             self.levels[level_index]['elements'].append(element)
+    
+    def add_landmark(self, x, y, text, level_index=0):
+        """Adds a new landmark to the specified level."""
+        if level_index in self.levels:
+            self.levels[level_index]['landmarks'].append({'x': x, 'y': y, 'text': text})
 
     def add_token(self, name, token_type, x, y, level_index=0):
         if level_index not in self.levels: return False
-        if any(t['name'] == name for t in self.get_all_tokens()): return False # Check all levels for name duplicates
+        if any(t['name'] == name for t in self.get_all_tokens()): return False
         self.levels[level_index]['tokens'].append({'name': name, 'type': token_type, 'x': x, 'y': y})
         return True
 
@@ -62,7 +68,6 @@ class MapModel:
         return None
 
     def get_all_tokens(self):
-        """Returns a flat list of all tokens from all levels."""
         all_tokens = []
         for level_data in self.levels.values():
             all_tokens.extend(level_data['tokens'])
@@ -77,7 +82,7 @@ class MapModel:
             'name': self.name, 'width': self.width, 'height': self.height, 
             'grid_size': self.grid_size, 'grid_scale': self.grid_scale,
             'map_type': self.map_type,
-            'levels': self.levels, # Save the entire multi-level structure
+            'levels': self.levels,
         }
         with open(json_path, 'w') as f:
             json.dump(map_data, f, indent=4)
@@ -91,20 +96,23 @@ class MapModel:
             data = json.load(f)
             map_instance = MapModel(
                 campaign_path, data['name'], data['width'], data['height'], 
-                data.get('grid_size', 20),
-                data.get('grid_scale', 1.5)
+                data.get('grid_size', 20), data.get('grid_scale', 1.5)
             )
             map_instance.map_type = data.get('map_type', 'outside')
             
-            # Legacy support for old maps
             if 'map_elements' in data:
-                 map_instance.levels = {0: {'elements': data.get('map_elements', []), 'tokens': data.get('tokens', [])}}
+                 map_instance.levels = {0: {
+                     'elements': data.get('map_elements', []), 
+                     'tokens': data.get('tokens', []),
+                     'landmarks': data.get('landmarks', []) # Legacy support
+                }}
             else:
-                 map_instance.levels = data.get('levels', {0: {'elements': [], 'tokens': []}})
-                 # Ensure keys are integers
+                 map_instance.levels = data.get('levels', {0: {'elements': [], 'tokens': [], 'landmarks': []}})
                  map_instance.levels = {int(k): v for k, v in map_instance.levels.items()}
-
-
+                 # Ensure landmarks key exists for older saves
+                 for level_data in map_instance.levels.values():
+                     if 'landmarks' not in level_data:
+                         level_data['landmarks'] = []
             return map_instance
 
     @staticmethod

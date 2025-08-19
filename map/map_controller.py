@@ -146,18 +146,24 @@ class MapController:
             self.app_controller.set_dirty_flag()
         self.editor_start_pos = None
 
-    def on_viewer_canvas_press(self, event):
+    def on_editor_canvas_press(self, event):
         if not self.model: return
-        x_grid, y_grid = event.x // self.model.grid_size, event.y // self.model.grid_size
-        if self.current_tool == "place_token":
-            token_str = self.view.token_placer_list.get()
-            if not token_str or "No tokens" in token_str: return
-            token_type, token_name = token_str.split(': ', 1)
-            if self.model.add_token(token_name, token_type, x_grid, y_grid, self.current_level):
-                self._redraw_viewer_canvas()
-                self.app_controller.set_dirty_flag()
-            else:
-                MessageBox.showwarning("Warning", f"Token '{token_name}' is already on the map (possibly on another level).", self.view.parent_frame)
+        self.editor_start_pos = (event.x, event.y)
+
+        # --- NEW: Handle placing a landmark ---
+        if self.current_tool == "landmark":
+            landmark_text = self.view.landmark_text_entry.get()
+            if not landmark_text:
+                MessageBox.showwarning("Warning", "Please enter text for the landmark first.", self.view.parent_frame)
+                return
+            
+            x_grid = event.x // self.model.grid_size
+            y_grid = event.y // self.model.grid_size
+            
+            self.model.add_landmark(x_grid, y_grid, landmark_text, self.current_level)
+            self._redraw_editor_view_only()
+            self.app_controller.set_dirty_flag()
+            # Revert tool to select after placing one
             self.set_tool("select")
             return
         

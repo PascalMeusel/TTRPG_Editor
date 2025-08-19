@@ -48,6 +48,11 @@ class MapView:
         colors = {"Stone": "#999999", "Grass": "#6B8E23", "Water": "#4682B4", "Wood": "#8B4513"}
         for name, code in colors.items(): ctk.CTkRadioButton(toolbar, text=name, variable=self.color_var, value=code).pack(anchor="w", padx=20, pady=2)
         
+        ctk.CTkLabel(toolbar, text="Landmark Tool", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 5))
+        self.landmark_text_entry = ctk.CTkEntry(toolbar, placeholder_text="Landmark Text...")
+        self.landmark_text_entry.pack(pady=5, padx=10, fill="x")
+        ctk.CTkButton(toolbar, text="Place Landmark", command=lambda: controller.set_tool("landmark")).pack(pady=5, padx=10, fill="x")
+
         ctk.CTkLabel(toolbar, text="Map Properties", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 5))
         scale_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
         scale_frame.pack(fill="x", padx=10, pady=5)
@@ -167,15 +172,46 @@ class MapView:
         for i in range(0, height + 1, grid_size):
             canvas.create_line(0, i, width, i, tag="grid_line", fill="#444444")
 
+    # --- NEW: Helper method to draw landmark text ---
+    def _draw_landmarks(self, canvas, map_model, current_level):
+        if 'landmarks' not in map_model.levels[current_level]: return
+        
+        grid_size = map_model.grid_size
+        for landmark in map_model.levels[current_level]['landmarks']:
+            x = (landmark['x'] + 0.5) * grid_size
+            y = (landmark['y'] + 0.5) * grid_size
+            canvas.create_text(x, y, text=landmark['text'], fill="yellow", 
+                               font=("Arial", 10, "bold"), anchor="center")
+
     def draw_editor_canvas(self, map_model, current_level):
         canvas_width = map_model.width * map_model.grid_size
         canvas_height = map_model.height * map_model.grid_size
         self.editor_canvas.configure(width=canvas_width, height=canvas_height)
         self.editor_canvas.delete("all")
+        
         for elem in map_model.levels[current_level]['elements']:
             coords = tuple(c * map_model.grid_size for c in elem['coords'])
             self.editor_canvas.create_rectangle(coords, fill=elem['color'], outline="")
+        
         self._draw_grid(self.editor_canvas, canvas_width, canvas_height, map_model.grid_size)
+        # --- NEW: Call the landmark drawing method ---
+        self._draw_landmarks(self.editor_canvas, map_model, current_level)
+
+    def draw_static_background(self, map_model, current_level):
+        """Draws the map background and landmarks on the viewer canvas."""
+        canvas_width = map_model.width * map_model.grid_size
+        canvas_height = map_model.height * map_model.grid_size
+        self.viewer_canvas.configure(width=canvas_width, height=canvas_height)
+        self.viewer_canvas.delete("all")
+        if not map_model: return
+        
+        for elem in map_model.levels[current_level]['elements']:
+            coords = tuple(c * map_model.grid_size for c in elem['coords'])
+            self.viewer_canvas.create_rectangle(coords, fill=elem['color'], outline="")
+        
+        self._draw_grid(self.viewer_canvas, canvas_width, canvas_height, map_model.grid_size)
+        # --- NEW: Call the landmark drawing method ---
+        self._draw_landmarks(self.viewer_canvas, map_model, current_level)
 
     def draw_viewer_canvas(self, map_model, controller):
         self.viewer_canvas.delete("token", "overlay")

@@ -1,5 +1,6 @@
 import customtkinter as ctk
 from character.character_view import AddItemDialog
+from ui_extensions import AutoWidthComboBox # Absolute import from project root
 
 class NpcView:
     """Manages the UI for the self-contained NPC feature."""
@@ -16,32 +17,40 @@ class NpcView:
         self.sheet_is_built = False
 
     def setup_ui(self, controller):
+        """Builds all static UI elements for both NPC tabs."""
         self._setup_creator_ui(controller)
         self.setup_sheet_ui(controller)
 
     def _setup_creator_ui(self, controller):
+        """Builds the UI for the NPC Creator and Manager tab."""
         container = ctk.CTkFrame(self.creator_tab, fg_color="transparent")
         container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=1)
         container.grid_rowconfigure(1, weight=1)
+        
         ctk.CTkLabel(container, text="Create & Manage NPCs", font=ctk.CTkFont(size=18, weight="bold")).grid(row=0, column=0, pady=20, padx=20)
+        
         main_pane = ctk.CTkFrame(container, fg_color="transparent")
         main_pane.grid(row=1, column=0, sticky="nsew", padx=20, pady=(0, 20))
         main_pane.grid_columnconfigure(0, weight=2)
         main_pane.grid_columnconfigure(1, weight=1)
         main_pane.grid_rowconfigure(0, weight=1)
+
         create_frame = ctk.CTkFrame(main_pane)
         create_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
         create_frame.grid_columnconfigure(0, weight=1)
         create_frame.grid_rowconfigure(2, weight=1)
         ctk.CTkLabel(create_frame, text="Create New NPC", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, pady=10)
+        
         name_frame = ctk.CTkFrame(create_frame, fg_color="transparent")
         name_frame.grid(row=1, column=0, pady=5, padx=10, sticky="new")
         ctk.CTkLabel(name_frame, text="NPC Name:", anchor="w").pack(side="left", padx=5)
         self.npc_name_entry = ctk.CTkEntry(name_frame)
         self.npc_name_entry.pack(side="left", fill="x", expand=True)
+        
         self.npc_creator_fields_frame = ctk.CTkScrollableFrame(create_frame)
         self.npc_creator_fields_frame.grid(row=2, column=0, pady=10, padx=10, sticky="nsew")
+        
         gm_fields_frame = ctk.CTkFrame(create_frame, fg_color="transparent")
         gm_fields_frame.grid(row=3, column=0, pady=10, padx=10, sticky="ew")
         gm_fields_frame.grid_columnconfigure((0, 1), weight=1)
@@ -51,17 +60,21 @@ class NpcView:
         ctk.CTkLabel(gm_fields_frame, text="Generated Items:", anchor="w").grid(row=0, column=1, sticky="w", padx=(5,0))
         self.generated_items_list = ctk.CTkTextbox(gm_fields_frame, height=80, state="disabled", fg_color="gray20")
         self.generated_items_list.grid(row=1, column=1, sticky="ew", padx=(5, 0))
+        
         creator_button_frame = ctk.CTkFrame(create_frame, fg_color="transparent")
         creator_button_frame.grid(row=4, column=0, pady=10, padx=10, sticky="ew")
         creator_button_frame.grid_columnconfigure((0, 1), weight=1)
         ctk.CTkButton(creator_button_frame, text="Save NPC", command=controller.save_new_npc).grid(row=0, column=0, padx=(0, 5), sticky="ew")
         ctk.CTkButton(creator_button_frame, text="Generate Random", command=controller.generate_random_npc).grid(row=0, column=1, padx=(5, 0), sticky="ew")
+        
         manage_frame = ctk.CTkFrame(main_pane)
         manage_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
         ctk.CTkLabel(manage_frame, text="Existing NPCs", font=ctk.CTkFont(size=16, weight="bold")).pack(pady=10)
-        self.npc_management_list = ctk.CTkComboBox(manage_frame, state="readonly")
+        
+        self.npc_management_list = AutoWidthComboBox(manage_frame, state="readonly")
         self.npc_management_list.pack(fill="x", padx=10, pady=5)
         self.npc_management_list.bind("<Button-1>", lambda event: self.npc_management_list._open_dropdown_menu())
+        
         ctk.CTkButton(manage_frame, text="Delete Selected NPC", command=controller.delete_selected_npc, fg_color="#D2691E", hover_color="#B2590E").pack(pady=10)
 
     def populate_creator_fields(self, npc_data):
@@ -96,9 +109,11 @@ class NpcView:
         load_frame = ctk.CTkFrame(container)
         load_frame.grid(row=0, column=0, pady=(10, 20), padx=20, sticky="ew")
         ctk.CTkLabel(load_frame, text="Load NPC:").pack(side="left", padx=(10,10))
-        self.npc_sheet_list = ctk.CTkComboBox(load_frame, values=["-"], state="readonly")
+        
+        self.npc_sheet_list = AutoWidthComboBox(load_frame, values=["-"], state="readonly")
         self.npc_sheet_list.pack(side="left", padx=5, fill="x", expand=True)
         self.npc_sheet_list.bind("<Button-1>", lambda event: self.npc_sheet_list._open_dropdown_menu())
+        
         ctk.CTkButton(load_frame, text="Load", command=controller.load_npc_to_sheet).pack(side="left", padx=(10,10))
         self.sheet_content_frame = ctk.CTkFrame(container, fg_color="transparent")
         self.sheet_content_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
@@ -131,24 +146,17 @@ class NpcView:
         self.clear_sheet()
         self.npc_sheet_entries.clear()
         self.sheet_content_wrapper = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
-        self.sheet_content_wrapper.grid_columnconfigure(0, weight=1)
+        self.sheet_content_wrapper.grid_columnconfigure((0,1), weight=1)
         self.sheet_content_wrapper.grid_rowconfigure(1, weight=1)
         self.sheet_name_label = ctk.CTkLabel(self.sheet_content_wrapper, text="", font=ctk.CTkFont(size=20, weight="bold"))
-        self.sheet_name_label.grid(row=0, column=0, pady=5)
-        sheet_pane = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
-        sheet_pane.grid(row=1, column=0, pady=10, sticky="nsew")
-        sheet_pane.grid_columnconfigure(0, weight=1)
-        sheet_pane.grid_columnconfigure(1, weight=1)
-        sheet_pane.grid_rowconfigure(0, weight=1)
-        stats_frame = ctk.CTkScrollableFrame(sheet_pane, label_text="Stats & Skills")
-        stats_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        gm_pane = ctk.CTkFrame(sheet_pane, fg_color="transparent")
-        gm_pane.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
-        
-        # --- FIX: Configure rows to expand vertically ---
-        gm_pane.grid_rowconfigure(1, weight=2) # Give more weight to notes
-        gm_pane.grid_rowconfigure(3, weight=1) # Give some weight to inventory
-        
+        self.sheet_name_label.grid(row=0, column=0, columnspan=2, pady=5, sticky="w", padx=10)
+        stats_frame = ctk.CTkScrollableFrame(self.sheet_content_wrapper, label_text="Stats & Skills")
+        stats_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+        gm_pane = ctk.CTkFrame(self.sheet_content_wrapper)
+        gm_pane.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
+        gm_pane.grid_columnconfigure(0, weight=1)
+        gm_pane.grid_rowconfigure(1, weight=2)
+        gm_pane.grid_rowconfigure(3, weight=1)
         all_stat_keys = rule_set['attributes'] + list(rule_set['skills'].keys())
         for key in all_stat_keys:
             frame = ctk.CTkFrame(stats_frame, fg_color="transparent")
@@ -169,7 +177,7 @@ class NpcView:
         self.inventory_list_frame = ctk.CTkScrollableFrame(gm_pane)
         self.inventory_list_frame.grid(row=3, column=0, sticky="nsew")
         button_frame = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
-        button_frame.grid(row=2, column=0, pady=20)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=20)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_npc_sheet).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Delete NPC", command=controller.delete_current_npc, fg_color="#D2691E", hover_color="#B2590E").pack(side="left", padx=10)
         self.sheet_is_built = True
@@ -231,15 +239,16 @@ class NpcView:
             self.sheet_content_wrapper.pack_forget()
 
     def update_npc_management_list(self, npcs):
-        npcs = ["-"] + npcs if npcs else ["-"]
-        self.npc_management_list.configure(values=npcs)
-        self.npc_management_list.set(npcs[0])
+        """Refreshes the dropdown list of existing NPCs."""
+        values = ["-"] + (npcs or [])
+        self.npc_management_list.configure(values=values)
+        self.npc_management_list.set(values[0])
         
     def update_npc_sheet_list(self, npcs):
-        npcs = ["-"] + npcs if npcs else ["-"]
-        self.npc_sheet_list.configure(values=npcs)
-        self.npc_sheet_list.set(npcs[0])
+        """Refreshes the dropdown list of NPCs on the sheet tab."""
+        values = ["-"] + (npcs or [])
+        self.npc_sheet_list.configure(values=values)
+        self.npc_sheet_list.set(values[0])
 
     def highlight_selection(self):
-        # Highlighting is no longer needed for ComboBox
         pass

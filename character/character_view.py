@@ -1,7 +1,8 @@
 import customtkinter as ctk
+from ui_extensions import AutoWidthComboBox
 
 class AddItemDialog(ctk.CTkToplevel):
-    """A reusable modal dialog for adding an item from a master list."""
+    # ... (This class is correct and unchanged)
     def __init__(self, parent, all_items):
         super().__init__(parent)
         self.title("Add Item to Inventory")
@@ -28,7 +29,6 @@ class AddItemDialog(ctk.CTkToplevel):
         self.update_idletasks()
         self.grab_set()
         self.wait_window()
-
     def _select(self, item):
         self.selected_item = item
         self.confirm_button.configure(state="normal")
@@ -37,21 +37,17 @@ class AddItemDialog(ctk.CTkToplevel):
                 btn.configure(fg_color="#3B8ED0", border_color="#3B8ED0")
             else:
                 btn.configure(fg_color="transparent", border_color="gray50")
-
     def _on_confirm(self):
         self.grab_release()
         self.destroy()
-
     def _on_cancel(self):
         self.selected_item = None
         self.grab_release()
         self.destroy()
-
     def get_selection(self):
         return self.selected_item
 
 class CharacterView:
-    """Manages the UI for the Character feature, now with its own TabView."""
     def __init__(self, parent_frame):
         self.parent_frame = parent_frame
         self.tab_view = ctk.CTkTabview(parent_frame, fg_color="transparent")
@@ -89,7 +85,7 @@ class CharacterView:
         load_frame = ctk.CTkFrame(container)
         load_frame.grid(row=0, column=0, pady=(10, 20), padx=20, sticky="ew")
         ctk.CTkLabel(load_frame, text="Load Character:").pack(side="left", padx=(10,10))
-        self.char_sheet_list = ctk.CTkComboBox(load_frame, values=["-"], state="readonly")
+        self.char_sheet_list = AutoWidthComboBox(load_frame, values=["-"], state="readonly")
         self.char_sheet_list.pack(side="left", padx=5, fill="x", expand=True)
         self.char_sheet_list.bind("<Button-1>", lambda event: self.char_sheet_list._open_dropdown_menu())
         ctk.CTkButton(load_frame, text="Load", command=controller.load_character_to_sheet).pack(side="left", padx=(10,10))
@@ -124,32 +120,22 @@ class CharacterView:
         self.clear_sheet()
         self.char_sheet_entries.clear()
         self.sheet_content_wrapper = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
-        self.sheet_content_wrapper.grid_columnconfigure(0, weight=1)
+        self.sheet_content_wrapper.grid_columnconfigure((0, 1), weight=1)
         self.sheet_content_wrapper.grid_rowconfigure(1, weight=1)
         self.sheet_name_label = ctk.CTkLabel(self.sheet_content_wrapper, text="", font=ctk.CTkFont(size=20, weight="bold"))
-        self.sheet_name_label.grid(row=0, column=0, pady=5)
-        sheet_pane = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
-        sheet_pane.grid(row=1, column=0, pady=10, sticky="nsew")
-        
-        # --- FIX: Configure columns and rows to expand correctly ---
-        sheet_pane.grid_columnconfigure((0, 1), weight=1)
-        sheet_pane.grid_rowconfigure(0, weight=1)
-        
-        stats_frame = ctk.CTkScrollableFrame(sheet_pane, label_text="Stats & Skills")
-        stats_frame.grid(row=0, column=0, sticky="nsew", padx=(0, 10))
-        
-        inv_frame = ctk.CTkFrame(sheet_pane)
-        inv_frame.grid(row=0, column=1, sticky="nsew", padx=(10, 0))
+        self.sheet_name_label.grid(row=0, column=0, columnspan=2, pady=5, padx=10, sticky="w")
+        stats_frame = ctk.CTkScrollableFrame(self.sheet_content_wrapper, label_text="Stats & Skills")
+        stats_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
+        inv_frame = ctk.CTkFrame(self.sheet_content_wrapper)
+        inv_frame.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
+        inv_frame.grid_columnconfigure(0, weight=1)
         inv_frame.grid_rowconfigure(1, weight=1)
-        
         inv_header_frame = ctk.CTkFrame(inv_frame, fg_color="transparent")
         inv_header_frame.grid(row=0, column=0, sticky="ew", pady=(0,5))
         ctk.CTkLabel(inv_header_frame, text="Inventory", font=ctk.CTkFont(size=14, weight="bold")).pack(side="left")
         ctk.CTkButton(inv_header_frame, text="Add Item", width=80, command=controller.show_add_item_dialog).pack(side="right")
-        
         self.inventory_list_frame = ctk.CTkScrollableFrame(inv_frame)
         self.inventory_list_frame.grid(row=1, column=0, sticky="nsew")
-        
         all_stat_keys = rule_set['attributes'] + list(rule_set['skills'].keys())
         for key in all_stat_keys:
             frame = ctk.CTkFrame(stats_frame, fg_color="transparent")
@@ -159,12 +145,10 @@ class CharacterView:
             entry.pack(side="left", fill="x", expand=True)
             self.char_sheet_entries[key] = entry
             entry.bind("<KeyRelease>", controller.mark_as_dirty)
-
         button_frame = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
-        button_frame.grid(row=2, column=0, pady=10)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=10)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_character_sheet).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Delete Character", command=controller.delete_current_character, fg_color="#D2691E", hover_color="#B2590E").pack(side="left", padx=10)
-        
         self.sheet_is_built = True
 
     def display_sheet_data(self, character, item_controller, char_controller):
@@ -222,6 +206,7 @@ class CharacterView:
             self.sheet_content_wrapper.pack_forget()
 
     def update_character_list(self, characters):
-        characters = ["-"] + characters if characters else ["-"]
-        self.char_sheet_list.configure(values=characters)
-        self.char_sheet_list.set(characters[0])
+        """Updates the dropdown list of characters on the sheet tab."""
+        values = ["-"] + (characters or [])
+        self.char_sheet_list.configure(values=values)
+        self.char_sheet_list.set(values[0])
