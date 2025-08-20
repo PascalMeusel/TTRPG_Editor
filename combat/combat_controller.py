@@ -54,26 +54,26 @@ class CombatController:
             MessageBox.showinfo("Info", "Add combatants to the roster before starting combat.", self.view.frame)
             return
         self.model.start_combat()
-        self._redraw_tracker()
+        
+        # --- FIX: Call the one-time UI setup, then update the list ---
+        self.view.display_tracker_ui(self)
+        self._update_turn_order_view()
 
     def next_turn(self):
         self.model.next_turn()
-        self._redraw_tracker()
+        self._update_turn_order_view()
 
     def end_combat(self):
-        """Ends combat, saves FINAL CURRENT HP, and fully clears the roster."""
         for combatant_data in self.model.combatants.values():
             base_model = combatant_data['base_model']
             final_hp = combatant_data['current_hp']
-            
-            # --- FIX: ONLY update the 'current_hp' field. Do NOT touch 'Hit Points'. ---
             base_model.current_hp = str(final_hp)
             base_model.save()
-        
         self.model.reset_roster()
         self.view.clear_view()
         self.view.update_roster_list(self.model.combatants, self)
         self.app_controller.refresh_char_npc_sheet_if_loaded()
+        self.update_combatant_lists()
         MessageBox.showinfo("Combat Ended", "Combat has ended. Current Hit Points have been saved.", self.view.frame)
 
     def apply_damage(self):
@@ -82,7 +82,7 @@ class CombatController:
         try:
             amount = int(self.view.action_value_entry.get())
             self.model.apply_damage(combatant['id'], amount)
-            self._redraw_tracker()
+            self._update_turn_order_view()
         except (ValueError, TypeError): pass
         self.view.action_value_entry.delete(0, 'end')
 
@@ -92,14 +92,26 @@ class CombatController:
         try:
             amount = int(self.view.action_value_entry.get())
             self.model.apply_healing(combatant['id'], amount)
-            self._redraw_tracker()
+            self._update_turn_order_view()
         except (ValueError, TypeError): pass
         self.view.action_value_entry.delete(0, 'end')
 
     def set_status(self, combatant_id, text):
         self.model.set_status(combatant_id, text)
 
-    def _redraw_tracker(self):
+    def move_combatant_up(self, combatant_id):
+        self.model.move_combatant_up(combatant_id)
+        self._update_turn_order_view()
+
+    def move_combatant_down(self, combatant_id):
+        self.model.move_combatant_down(combatant_id)
+        self._update_turn_order_view()
+
+    def _update_turn_order_view(self):
+        """
+        --- FIX: Renamed from _redraw_tracker for clarity. ---
+        This method now only calls the list update function.
+        """
         current_combatant = self.model.get_current_combatant()
         current_id = current_combatant['id'] if current_combatant else None
-        self.view.display_tracker(self.model.turn_order, self.model.combatants, current_id, self)
+        self.view.update_turn_order_list(self.model.turn_order, self.model.combatants, current_id, self)

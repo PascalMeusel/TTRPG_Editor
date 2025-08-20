@@ -69,16 +69,13 @@ class AppController:
 
     def _show_editor(self):
         self.main_menu_view.pack_forget()
-        
         if self.editor_frame is None:
             self.unsaved_changes = False
             self.feature_cache = {}
-            
             self.editor_frame = ctk.CTkFrame(self.root, fg_color="transparent")
             self.editor_frame.pack(fill="both", expand=True)
             self.editor_frame.grid_columnconfigure(1, weight=1)
             self.editor_frame.grid_rowconfigure(1, weight=1)
-
             header_frame = ctk.CTkFrame(self.editor_frame, corner_radius=0, height=60, border_width=1, border_color="gray25")
             header_frame.grid(row=0, column=0, columnspan=2, sticky="ew")
             header_left = ctk.CTkFrame(header_frame, fg_color="transparent")
@@ -128,9 +125,7 @@ class AppController:
                 button.pack(fill="x")
                 button.bind("<Button-1>", lambda event, n=name: self.load_feature(n))
                 button.bind("<Button-3>", lambda event, n=name: self._show_context_menu(event, n))
-            ctk.CTkButton(sidebar_frame, text="< Back to Main Menu", command=self.confirm_exit_to_main_menu,
-                          fg_color="transparent", border_width=1, border_color="gray50", height=40).grid(
-                row=1, column=0, sticky="sew", padx=10, pady=10)
+            ctk.CTkButton(sidebar_frame, text="< Back to Main Menu", command=self.confirm_exit_to_main_menu, fg_color="transparent", border_width=1, border_color="gray50", height=40).grid(row=1, column=0, sticky="sew", padx=10, pady=10)
             ruleset_name = self.campaign_model.get_campaign_ruleset(os.path.basename(self.current_campaign_path))
             if ruleset_name:
                 rules_model = RulesModel()
@@ -145,7 +140,6 @@ class AppController:
             self.root.after(100, lambda: self.paned_window.sash_place(0, self.paned_window.winfo_width() // 2, 0))
             self.load_feature_into_pane("Characters", "left")
             self.load_feature_into_pane("Items", "right")
-
         self.editor_frame.pack(fill="both", expand=True)
         self.editor_frame.tkraise()
 
@@ -164,16 +158,11 @@ class AppController:
                 self.left_pin_button.configure(fg_color="transparent")
 
     def load_feature(self, feature_name):
-        if self.left_pane_pinned and self.right_pane_pinned:
-            self.load_feature_into_pane(feature_name, "right")
-        elif self.left_pane_pinned:
-            self.load_feature_into_pane(feature_name, "right")
-        elif self.right_pane_pinned:
-            self.load_feature_into_pane(feature_name, "left")
-        elif self.last_active_pane == "right":
-            self.load_feature_into_pane(feature_name, "left")
-        else:
-            self.load_feature_into_pane(feature_name, "right")
+        if self.left_pane_pinned and self.right_pane_pinned: self.load_feature_into_pane(feature_name, "right")
+        elif self.left_pane_pinned: self.load_feature_into_pane(feature_name, "right")
+        elif self.right_pane_pinned: self.load_feature_into_pane(feature_name, "left")
+        elif self.last_active_pane == "right": self.load_feature_into_pane(feature_name, "left")
+        else: self.load_feature_into_pane(feature_name, "right")
 
     def _show_context_menu(self, event, feature_name):
         context_menu = tk.Menu(self.root, tearoff=0, bg="#2B2B2B", fg="white", activebackground="#3B8ED0")
@@ -183,52 +172,32 @@ class AppController:
 
     def load_feature_into_pane(self, feature_name, pane_target):
         if feature_name == "Map Editor":
-            if not self.is_map_fullscreen:
-                self._enter_fullscreen_map_mode()
+            if not self.is_map_fullscreen: self._enter_fullscreen_map_mode()
             return
-        elif self.is_map_fullscreen:
-            self._exit_fullscreen_map_mode()
-
-        if pane_target == "left":
-            target_frame = self.left_pane_frame
-            target_label = self.left_pane_label
-        else:
-            target_frame = self.right_pane_frame
-            target_label = self.right_pane_label
-        
-        for widget in target_frame.winfo_children():
-            widget.pack_forget()
-
+        elif self.is_map_fullscreen: self._exit_fullscreen_map_mode()
+        target_frame = self.left_pane_frame if pane_target == "left" else self.right_pane_frame
+        target_label = self.left_pane_label if pane_target == "left" else self.right_pane_label
+        for widget in target_frame.winfo_children(): widget.pack_forget()
         if pane_target == "left": self.left_pane_content = None
         else: self.right_pane_content = None
-
-        # --- FIX: Robust Caching and Reparenting Logic ---
         if feature_name in self.feature_cache:
             cached_feature = self.feature_cache[feature_name]
             content = cached_feature['controller']
             feature_container = cached_feature['container']
-            
-            # This is the correct way to reparent a widget in Tkinter
             feature_container.master = target_frame
             feature_container.pack(fill="both", expand=True)
         else:
             feature_container = ctk.CTkFrame(target_frame, fg_color="transparent")
             feature_container.pack(fill="both", expand=True)
             content = None
-            if feature_name == "Characters":
-                content = CharacterController(self, feature_container, self.current_campaign_path)
-            elif feature_name == "NPCs":
-                content = NpcController(self, feature_container, self.current_campaign_path)
-            elif feature_name == "Items":
-                content = ItemController(self, feature_container, self.current_campaign_path)
-            elif feature_name == "Combat":
-                content = CombatController(self, feature_container, self.current_campaign_path)
-            
+            if feature_name == "Characters": content = CharacterController(self, feature_container, self.current_campaign_path)
+            elif feature_name == "NPCs": content = NpcController(self, feature_container, self.current_campaign_path)
+            elif feature_name == "Items": content = ItemController(self, feature_container, self.current_campaign_path)
+            elif feature_name == "Combat": content = CombatController(self, feature_container, self.current_campaign_path)
             if content:
                 self.feature_cache[feature_name] = {'controller': content, 'container': feature_container}
                 if hasattr(content, 'handle_rule_set_load') and self.ruleset_data:
                     content.handle_rule_set_load(self.ruleset_data)
-        
         if content:
             target_label.configure(text=feature_name)
             if pane_target == "left":
@@ -277,16 +246,13 @@ class AppController:
         self.unsaved_changes = is_dirty
 
     def confirm_exit_to_main_menu(self):
-        if not self.unsaved_changes:
-            self.show_main_menu()
-            return
-        response = MessageBox.askyesnocancel("Unsaved Changes",
-                                             "You have unsaved changes...", parent=self.root)
-        if response is True:
-            MessageBox.showinfo("Save Manually", "Please use the 'Save Changes' buttons...", parent=self.root)
-        elif response is False:
-            self.unsaved_changes = False
-            self.show_main_menu()
+        if not self.unsaved_changes: self.show_main_menu()
+        else:
+            response = MessageBox.askyesnocancel("Unsaved Changes", "You have unsaved changes...", parent=self.root)
+            if response is True: MessageBox.showinfo("Save Manually", "Please use the 'Save Changes' buttons...", parent=self.root)
+            elif response is False:
+                self.unsaved_changes = False
+                self.show_main_menu()
             
     def new_game_flow(self):
         rules_model = RulesModel()
@@ -327,20 +293,6 @@ class AppController:
         standalone_rules_controller.set_view(ruleset_window)
         ruleset_window.set_controller(standalone_rules_controller)
 
-    # --- FIX: Add the missing method ---
-    def refresh_char_npc_sheet_if_loaded(self):
-        """
-        Finds loaded Character/NPC controllers and tells them to refresh their
-        currently displayed sheet, if any.
-        """
-        char_controller = self.get_loaded_controller(CharacterController)
-        if char_controller and char_controller.current_character:
-            char_controller.load_character_to_sheet(refresh=True)
-
-        npc_controller = self.get_loaded_controller(NpcController)
-        if npc_controller and npc_controller.current_npc:
-            npc_controller.load_npc_to_sheet(refresh=True)
-
     def show_placeholder_message(self):
         MessageBox.showinfo("Not Implemented", "This feature is not yet available.", self.root)
 
@@ -351,13 +303,17 @@ class AppController:
     def on_character_or_npc_list_changed(self):
         for feature in self.feature_cache.values():
             content = feature['controller']
-            if hasattr(content, 'update_combatant_lists'):
-                content.update_combatant_lists()
-            if hasattr(content, 'update_character_sheet_list'):
-                content.update_character_sheet_list()
-            if hasattr(content, 'update_npc_management_list'):
-                content.update_npc_management_list()
-            if hasattr(content, 'update_npc_sheet_list'):
-                content.update_npc_sheet_list()
-            if hasattr(content, 'update_token_placer_list'):
-                content.update_token_placer_list()
+            if hasattr(content, 'update_combatant_lists'): content.update_combatant_lists()
+            if hasattr(content, 'update_character_sheet_list'): content.update_character_sheet_list()
+            if hasattr(content, 'update_npc_management_list'): content.update_npc_management_list()
+            if hasattr(content, 'update_npc_sheet_list'): content.update_npc_sheet_list()
+            if hasattr(content, 'update_token_placer_list'): content.update_token_placer_list()
+
+    def refresh_char_npc_sheet_if_loaded(self):
+        """Finds loaded Character/NPC controllers and tells them to refresh."""
+        char_controller = self.get_loaded_controller(CharacterController)
+        if char_controller and char_controller.current_character:
+            char_controller.load_character_to_sheet(refresh=True)
+        npc_controller = self.get_loaded_controller(NpcController)
+        if npc_controller and npc_controller.current_npc:
+            npc_controller.load_npc_to_sheet(refresh=True)
