@@ -12,7 +12,6 @@ class CombatController:
         self.app_controller = app_controller
         self.model = CombatModel()
         self.view = CombatView(parent_frame)
-        self.view.setup_ui(self)
         self.campaign_path = campaign_path
         self.current_rule_set = None
         self.available_combatants = []
@@ -24,15 +23,15 @@ class CombatController:
     def update_combatant_lists(self):
         if not self.current_rule_set: return
         self.available_combatants = []
-        rule_set_name = self.current_rule_set['name']
-        char_names = CharacterModel.get_for_ruleset(self.campaign_path, rule_set_name)
-        for name in char_names:
-            char = CharacterModel.load(self.campaign_path, name)
-            if char: self.available_combatants.append(char)
-        npc_names = NpcModel.get_for_ruleset(self.campaign_path, rule_set_name)
-        for name in npc_names:
-            npc = NpcModel.load(self.campaign_path, name)
-            if npc: self.available_combatants.append(npc)
+        
+        char_controller = self.app_controller.get_loaded_controller(CharacterController)
+        if char_controller:
+            self.available_combatants.extend(char_controller.get_character_list())
+
+        npc_controller = self.app_controller.get_loaded_controller(NpcController)
+        if npc_controller:
+            self.available_combatants.extend(npc_controller.get_npc_list())
+
         self.view.update_available_list(self.available_combatants, self)
 
     def add_to_roster(self, base_model):

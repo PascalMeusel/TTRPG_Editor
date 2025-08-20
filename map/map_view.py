@@ -6,19 +6,24 @@ from ui_extensions import AutoWidthComboBox
 class MapView:
     """Manages the UI for the self-contained Map feature."""
     def __init__(self, parent_frame):
-        self.frame = ctk.CTkTabview(parent_frame, fg_color="transparent")
-        self.frame.pack(fill="both", expand=True, padx=5, pady=5)
-        self.editor_tab = self.tab_view.add("Editor")
-        self.viewer_tab = self.tab_view.add("Viewer")
-
+        self.parent_frame = parent_frame
         self.map_photo_image = None
         self.PC_COLOR = "#00BFFF"
         self.NPC_COLOR = "#DC143C"
 
     def setup_ui(self, controller):
         """Calls the setup methods for both internal tabs."""
+        self.parent_frame.grid_rowconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(0, weight=1)
+
+        self.frame = ctk.CTkTabview(self.parent_frame, fg_color="transparent")
+        self.frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
+        self.editor_tab = self.frame.add("Editor")
+        self.viewer_tab = self.frame.add("Viewer")
+
         self.setup_editor_ui(controller)
         self.setup_viewer_ui(controller)
+        controller._initialize_blank_state()
 
     def setup_editor_ui(self, controller):
         """Builds the UI for the Map Editor tab."""
@@ -28,7 +33,6 @@ class MapView:
         toolbar = ctk.CTkFrame(self.editor_tab, width=220)
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
         
-        # ... (Toolbar setup with .pack() is fine as it's self-contained) ...
         ctk.CTkButton(toolbar, text="New Map...", command=controller.show_new_map_dialog).pack(pady=10, padx=10, fill="x")
         ctk.CTkLabel(toolbar, text="Level Controls", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
         editor_level_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
@@ -63,7 +67,6 @@ class MapView:
         canvas_container = ctk.CTkScrollableFrame(self.editor_tab, label_text="Map Canvas")
         canvas_container.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         
-        # --- FIX: Configure the grid inside the scrollable frame ---
         canvas_container.grid_columnconfigure(0, weight=1)
         canvas_container.grid_rowconfigure(0, weight=1)
 
@@ -71,7 +74,6 @@ class MapView:
         self.editor_canvas.bind("<B1-Motion>", controller.on_editor_canvas_drag)
         self.editor_canvas.bind("<ButtonPress-1>", controller.on_editor_canvas_press)
         self.editor_canvas.bind("<ButtonRelease-1>", controller.on_editor_canvas_release)
-        # --- FIX: Use grid to place the canvas ---
         self.editor_canvas.grid(row=0, column=0, sticky="nsew")
 
     def setup_viewer_ui(self, controller):
@@ -81,7 +83,6 @@ class MapView:
         
         toolbar = ctk.CTkFrame(self.viewer_tab, width=220)
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
-        # ... (Toolbar setup with .pack() is fine) ...
         ctk.CTkLabel(toolbar, text="Select Map:").pack(pady=(10, 5))
         self.map_selection_list = AutoWidthComboBox(toolbar, command=controller.load_map_for_viewing)
         self.map_selection_list.pack(pady=5, padx=10, fill="x")
@@ -112,7 +113,6 @@ class MapView:
         canvas_container = ctk.CTkScrollableFrame(self.viewer_tab, label_text="Live Map")
         canvas_container.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         
-        # --- FIX: Configure the grid inside the scrollable frame ---
         canvas_container.grid_columnconfigure(0, weight=1)
         canvas_container.grid_rowconfigure(0, weight=1)
 
@@ -121,7 +121,6 @@ class MapView:
         self.viewer_canvas.bind("<B1-Motion>", controller.on_viewer_canvas_drag)
         self.viewer_canvas.bind("<ButtonRelease-1>", controller.on_viewer_canvas_release)
         self.viewer_canvas.bind("<Control-Button-1>", controller.on_viewer_canvas_ctrl_press)
-        # --- FIX: Use grid to place the canvas ---
         self.viewer_canvas.grid(row=0, column=0, sticky="nsew")
 
     def clear_all_canvases(self):

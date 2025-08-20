@@ -1,28 +1,35 @@
 import json
-import os
 import uuid
+from database import Database
 
 class ItemModel:
     """Manages the item database for a specific campaign."""
     def __init__(self, campaign_path):
-        self.campaign_path = campaign_path
-        # Store campaign-specific data in the campaign folder itself
-        self.filepath = os.path.join(self.campaign_path, 'items.json')
+        self.db = Database(campaign_path)
 
     def load_all_items(self):
-        """Loads the entire list of items from items.json."""
-        if not os.path.exists(self.filepath):
+        """Loads the entire list of items from the database."""
+        self.db.connect()
+        rows = self.db.fetchall("SELECT data FROM items")
+        self.db.close()
+        if not rows:
             return []
-        with open(self.filepath, 'r') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
+        return [json.loads(row['data']) for row in rows]
 
-    def save_all_items(self, items_list):
-        """Saves the entire list of items to items.json."""
-        with open(self.filepath, 'w') as f:
-            json.dump(items_list, f, indent=4)
+    def save_item(self, item_data):
+        """Saves a single item to the database."""
+        self.db.connect()
+        self.db.execute(
+            "INSERT OR REPLACE INTO items (id, data) VALUES (?, ?)",
+            (item_data['id'], json.dumps(item_data))
+        )
+        self.db.close()
+
+    def delete_item(self, item_id):
+        """Deletes a single item from the database."""
+        self.db.connect()
+        self.db.execute("DELETE FROM items WHERE id = ?", (item_id,))
+        self.db.close()
 
     def create_item(self, name, description, item_type, modifiers):
         """Creates a new item dictionary with a unique ID."""

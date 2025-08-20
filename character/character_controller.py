@@ -12,7 +12,9 @@ class CharacterController:
         self.campaign_path = campaign_path
         self.current_rule_set = None
         self.current_character = None
-        self.view.setup_ui(self)
+        
+        # --- LAZY LOAD: Load data when controller is created ---
+        self.app_controller._reload_character_cache()
 
     def get_item_controller(self):
         return self.app_controller.get_loaded_controller(ItemController)
@@ -22,19 +24,21 @@ class CharacterController:
 
     def get_character_list(self):
         if self.current_rule_set:
-            return CharacterModel.get_for_ruleset(self.campaign_path, self.current_rule_set['name'])
+            cache_key = f"characters_models_{self.current_rule_set['name']}"
+            return self.app_controller.get_cached_data(cache_key) or []
         return []
 
     def handle_rule_set_load(self, rule_set):
         self.current_rule_set = rule_set
-        self.view.build_dynamic_fields(rule_set)
-        self.view.build_sheet_ui(rule_set, self)
+        # Let the view decide which parts of its UI need updating
+        self.view.handle_rule_set_load(rule_set)
         self.update_character_sheet_list()
 
     def update_character_sheet_list(self):
         if self.current_rule_set:
             characters = self.get_character_list()
-            self.view.update_character_list(characters)
+            char_names = [char.name for char in characters]
+            self.view.update_character_list(char_names)
         else:
             self.view.update_character_list([])
         self.view.clear_sheet()
@@ -58,14 +62,15 @@ class CharacterController:
         char.current_hp = char.attributes.get("Hit Points", "10")
         char.save()
         MessageBox.showinfo("Success", f"Character '{name}' saved.", self.view.parent_frame)
+        
         self.app_controller.on_character_or_npc_list_changed()
+
         self.view.char_name_entry.delete(0, 'end')
         for entry in self.view.char_creator_entries.values():
             entry.delete(0, 'end')
 
     def load_character_to_sheet(self, refresh=False):
         """Loads a selected character into the sheet view."""
-        # --- FIX: Remove the blocking error. Get controllers, but allow None. ---
         item_controller = self.get_item_controller()
         
         char_name = self.current_character.name if (refresh and self.current_character) else self.view.char_sheet_list.get().strip()
@@ -110,6 +115,7 @@ class CharacterController:
                 MessageBox.showinfo("Deleted", f"Character '{char_name}' has been deleted.", self.view.parent_frame)
                 self.current_character = None
                 self.view.clear_sheet()
+
                 self.app_controller.on_character_or_npc_list_changed()
                 self.app_controller.set_dirty_flag(False)
             else:

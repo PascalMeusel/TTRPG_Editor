@@ -3,7 +3,7 @@ from ui_extensions import AutoWidthComboBox
 from quest.quest_controller import QuestController
 
 class AddItemDialog(ctk.CTkToplevel):
-    """A reusable modal dialog for adding an item from a master list."""
+    # ... (This class is unchanged)
     def __init__(self, parent, all_items):
         super().__init__(parent)
         self.title("Add Item to Inventory")
@@ -54,21 +54,59 @@ class AddItemDialog(ctk.CTkToplevel):
 
 class CharacterView:
     def __init__(self, parent_frame):
-        self.frame = ctk.CTkTabview(parent_frame, fg_color="transparent")
-        self.frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.parent_frame = parent_frame
+        self.char_creator_entries = {}
+        self.char_sheet_entries = {}
+        self.creator_ui_built = False
+        self.sheet_ui_built = False
+        self.controller = None
+        self.rule_set = None
+
+    def setup_ui(self, controller):
+        self.controller = controller
+        self.parent_frame.grid_rowconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(0, weight=1)
+        
+        self.frame = ctk.CTkTabview(self.parent_frame, fg_color="transparent", command=self._on_tab_selected)
+        self.frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
         
         self.creator_tab = self.frame.add("Creator")
         self.sheet_tab = self.frame.add("Sheet")
         
-        self.char_creator_entries = {}
-        self.char_sheet_entries = {}
-        self.sheet_is_built = False
+        self._on_tab_selected()
 
-    def setup_ui(self, controller):
-        self.setup_creator_ui(controller)
-        self.setup_sheet_ui(controller)
+    def handle_rule_set_load(self, rule_set):
+        """Stores the ruleset and updates whichever tab is currently visible."""
+        self.rule_set = rule_set
+        if self.creator_ui_built:
+            self.build_dynamic_fields(rule_set)
+        if self.sheet_ui_built:
+            self.build_sheet_ui(rule_set, self.controller)
 
-    def setup_creator_ui(self, controller):
+    def _on_tab_selected(self):
+        selected_tab = self.frame.get()
+        
+        if selected_tab == "Creator" and not self.creator_ui_built:
+            print("Lazy building Character Creator UI...")
+            self._setup_creator_ui(self.controller)
+            self.creator_ui_built = True
+            if self.rule_set:
+                self.build_dynamic_fields(self.rule_set)
+        
+        elif selected_tab == "Sheet" and not self.sheet_ui_built:
+            print("Lazy building Character Sheet UI...")
+            self._setup_sheet_ui(self.controller)
+            self.sheet_ui_built = True
+            if self.rule_set:
+                self.build_sheet_ui(self.rule_set, self.controller)
+                self.update_character_list(
+                    [char.name for char in self.controller.get_character_list()]
+                )
+
+    def _setup_creator_ui(self, controller):
+        # ... (rest of the file is identical to the one you have)
+        # This includes _setup_creator_ui, _setup_sheet_ui, build_dynamic_fields,
+        # build_sheet_ui, display_sheet_data, etc. No changes are needed there.
         container = ctk.CTkFrame(self.creator_tab, fg_color="transparent")
         container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=1)
@@ -83,7 +121,7 @@ class CharacterView:
         self.char_creator_fields_frame.grid(row=2, column=0, pady=10, padx=20, sticky="nsew")
         ctk.CTkButton(container, text="Save Character", height=40, command=controller.save_new_character).grid(row=3, column=0, pady=20)
 
-    def setup_sheet_ui(self, controller):
+    def _setup_sheet_ui(self, controller):
         container = ctk.CTkFrame(self.sheet_tab, fg_color="transparent")
         container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=1)
@@ -99,6 +137,7 @@ class CharacterView:
         self.sheet_content_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
         
     def build_dynamic_fields(self, rule_set):
+        if not self.creator_ui_built: return
         for widget in self.char_creator_fields_frame.winfo_children():
             widget.destroy()
         self.char_creator_entries.clear()
@@ -123,6 +162,7 @@ class CharacterView:
         container.pack(fill="both", expand=True)
 
     def build_sheet_ui(self, rule_set, controller):
+        if not self.sheet_ui_built: return
         self.clear_sheet()
         self.char_sheet_entries.clear()
         self.sheet_content_wrapper = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
@@ -184,15 +224,17 @@ class CharacterView:
         button_frame.grid(row=2, column=0, columnspan=2, pady=10)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_character_sheet).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Delete Character", command=controller.delete_current_character, fg_color="#D2691E", hover_color="#B2590E").pack(side="left", padx=10)
-        self.sheet_is_built = True
-
+        
     def display_sheet_data(self, character, item_controller, char_controller):
-        if not self.sheet_is_built: return
+        # ... (rest of file is the same)
+        if not self.sheet_ui_built: return
+        
+        self.sheet_content_wrapper.pack(fill="both", expand=True)
+
         self.sheet_name_label.configure(text=character.name)
         
         effective_attrs = character.attributes.copy()
         
-        # --- FIX: Check if item_controller exists before calculating stats ---
         if item_controller:
             all_items_data = {item['id']: item for item in item_controller.all_items}
             for inv_entry in character.inventory:
@@ -230,13 +272,11 @@ class CharacterView:
         quest_controller = char_controller.app_controller.get_loaded_controller(QuestController)
         self.display_linked_quests(character.name, quest_controller)
         self.display_inventory(character.inventory, item_controller, char_controller)
-        self.sheet_content_wrapper.pack(fill="both", expand=True)
-
+        
     def display_linked_quests(self, char_name, quest_controller):
         for widget in self.linked_quests_frame.winfo_children():
             widget.destroy()
             
-        # --- FIX: Display a helpful message if the Quest pane isn't open ---
         if not quest_controller:
             ctk.CTkLabel(self.linked_quests_frame, text="Open 'Quests' pane\nto see links.", wraplength=150).pack(pady=10)
             return
@@ -253,7 +293,6 @@ class CharacterView:
         for widget in self.inventory_list_frame.winfo_children():
             widget.destroy()
             
-        # --- FIX: Display a helpful message if the Item pane isn't open ---
         if not item_controller:
             ctk.CTkLabel(self.inventory_list_frame, text="Open 'Items' pane\nto manage inventory.", wraplength=150).pack(pady=10)
             return
@@ -283,6 +322,7 @@ class CharacterView:
             self.sheet_content_wrapper.pack_forget()
 
     def update_character_list(self, characters):
+        if not self.sheet_ui_built: return
         values = ["-"] + (characters or [])
         self.char_sheet_list.configure(values=values)
         self.char_sheet_list.set(values[0])

@@ -3,15 +3,17 @@ import customtkinter as ctk
 class ItemView:
     """Manages the UI for the self-contained Item feature."""
     def __init__(self, parent_frame):
-        self.frame = parent_frame
-        self.frame.grid_columnconfigure(0, weight=1)
-        self.frame.grid_columnconfigure(1, weight=2)
-        self.frame.grid_rowconfigure(0, weight=1)
-
+        self.parent_frame = parent_frame
         self.modifier_widgets = {}
 
+    def setup_ui(self, controller):
+        """Builds the UI widgets and connects them to the controller."""
+        self.parent_frame.grid_columnconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(1, weight=2)
+        self.parent_frame.grid_rowconfigure(0, weight=1)
+
         # Left Pane: List of existing items
-        list_frame = ctk.CTkFrame(self.frame)
+        list_frame = ctk.CTkFrame(self.parent_frame)
         list_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         list_frame.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(list_frame, text="Campaign Items", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=10, pady=10)
@@ -19,7 +21,7 @@ class ItemView:
         self.item_list_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
         # Right Pane: Editor for creating/editing an item
-        editor_frame = ctk.CTkFrame(self.frame)
+        editor_frame = ctk.CTkFrame(self.parent_frame)
         editor_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         editor_frame.grid_columnconfigure(0, weight=1)
         editor_frame.grid_rowconfigure(4, weight=1)
@@ -46,11 +48,8 @@ class ItemView:
         self.button_frame = ctk.CTkFrame(editor_frame, fg_color="transparent")
         self.button_frame.grid(row=5, column=0, sticky="ew", pady=10, padx=10)
 
-    def setup_ui(self, controller):
-        """Connects controller methods to the UI buttons."""
         self.save_new_button = ctk.CTkButton(self.button_frame, text="Save New Item", command=controller.save_new_item)
         self.save_new_button.pack(side="left", padx=5)
-
         self.save_changes_button = ctk.CTkButton(self.button_frame, text="Save Changes", command=controller.save_changes)
         self.delete_button = ctk.CTkButton(self.button_frame, text="Delete Item", command=controller.delete_item, fg_color="#D2691E", hover_color="#B2590E")
         self.clear_button = ctk.CTkButton(self.button_frame, text="Clear Form", command=controller.clear_editor_fields)

@@ -8,11 +8,13 @@ class ItemController:
         self.app_controller = app_controller
         self.model = ItemModel(campaign_path)
         self.view = ItemView(parent_frame)
-        self.view.setup_ui(self)
 
         self.all_items = []
         self.selected_item = None
         self.current_rule_set = None
+
+    def on_ui_ready(self):
+        """Called by AppController after the UI frame has been created."""
         self.load_all_items()
 
     def handle_rule_set_load(self, rule_set):
@@ -30,7 +32,10 @@ class ItemController:
 
     def load_all_items(self):
         """Loads items from the model and tells the view to display them."""
+        # --- MODIFIED: No longer checks cache, it's the source of truth now ---
         self.all_items = self.model.load_all_items()
+        self.app_controller.set_cached_data('items', self.all_items)
+
         self.all_items.sort(key=lambda x: x['name'].lower())
         self.view.display_items(self.all_items, self)
         self.clear_editor_fields()
@@ -66,8 +71,7 @@ class ItemController:
         modifiers = self._get_modifiers_from_view()
         
         new_item = self.model.create_item(name, desc, item_type, modifiers)
-        self.all_items.append(new_item)
-        self.model.save_all_items(self.all_items)
+        self.model.save_item(new_item)
         self.load_all_items()
         MessageBox.showinfo("Success", f"Item '{name}' created.", parent=self.view.parent_frame)
 
@@ -79,8 +83,7 @@ class ItemController:
             item_data["type"],
             item_data["modifiers"]
         )
-        self.all_items.append(new_item)
-        self.model.save_all_items(self.all_items)
+        self.model.save_item(new_item)
         # Note: We don't call load_all_items() here to avoid multiple UI refreshes
         # The calling function (NPC controller) will handle the final UI refresh.
         return new_item
@@ -100,15 +103,19 @@ class ItemController:
             
         modifiers = self._get_modifiers_from_view()
         
+        item_to_update = None
         for item in self.all_items:
             if item["id"] == self.selected_item["id"]:
                 item["name"] = new_name
                 item["description"] = new_desc
                 item["type"] = new_type
                 item["modifiers"] = modifiers
+                item_to_update = item
                 break
         
-        self.model.save_all_items(self.all_items)
+        if item_to_update:
+            self.model.save_item(item_to_update)
+
         self.load_all_items()
         MessageBox.showinfo("Success", f"Item '{new_name}' updated.", parent=self.view.parent_frame)
 
@@ -118,8 +125,7 @@ class ItemController:
             return
             
         if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete '{self.selected_item['name']}'?", parent=self.view.parent_frame):
-            self.all_items = [item for item in self.all_items if item["id"] != self.selected_item["id"]]
-            self.model.save_all_items(self.all_items)
+            self.model.delete_item(self.selected_item["id"])
             self.load_all_items()
             MessageBox.showinfo("Deleted", "Item has been deleted.", parent=self.view.parent_frame)
 

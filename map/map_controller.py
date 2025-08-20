@@ -9,6 +9,7 @@ import customtkinter as ctk
 import math
 import os
 
+    
 class MapController:
     """Controller for the self-contained Map feature."""
     def __init__(self, app_controller, parent_frame, campaign_path):
@@ -23,8 +24,8 @@ class MapController:
         self.token_being_dragged = None
         self.drag_start_pos = {}
         self.drag_preview_pos = None
-        self.view.setup_ui(self)
-        self._initialize_blank_state()
+
+  
 
     def _initialize_blank_state(self):
         self.model = None
@@ -81,10 +82,12 @@ class MapController:
         char_controller = self.app_controller.get_loaded_controller(CharacterController)
         npc_controller = self.app_controller.get_loaded_controller(NpcController)
         pc_list, npc_list = [], []
-        if char_controller and hasattr(char_controller, 'get_character_list'):
-            pc_list = [f"PC: {name}" for name in char_controller.get_character_list()]
-        if npc_controller and hasattr(npc_controller, 'get_npc_list'):
-            npc_list = [f"NPC: {name}" for name in npc_controller.get_npc_list()]
+        if char_controller:
+            pc_models = char_controller.get_character_list()
+            pc_list = [f"PC: {model.name}" for model in pc_models]
+        if npc_controller:
+            npc_models = npc_controller.get_npc_list()
+            npc_list = [f"NPC: {model.name}" for model in npc_models]
         self.view.update_token_placer_list(pc_list + npc_list)
 
     def set_tool(self, tool_name):

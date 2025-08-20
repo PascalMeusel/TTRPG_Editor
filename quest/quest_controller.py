@@ -11,10 +11,12 @@ class QuestController:
         self.app_controller = app_controller
         self.model = QuestModel(campaign_path)
         self.view = QuestView(parent_frame)
-        self.view.setup_ui(self)
         self.campaign_path = campaign_path
         self.all_quests = []
         self.selected_quest = None
+
+    def on_ui_ready(self):
+        """Called by AppController after the UI frame has been created."""
         self.load_all_quests()
 
     def get_all_quests(self):
@@ -22,7 +24,10 @@ class QuestController:
         return self.all_quests
 
     def load_all_quests(self):
+        # --- MODIFIED: No longer checks cache, it's the source of truth now ---
         self.all_quests = self.model.load_all_quests()
+        self.app_controller.set_cached_data('quests', self.all_quests)
+
         quests_by_status = {"Active": [], "Inactive": [], "Completed": [], "Failed": []}
         for quest in self.all_quests:
             status = quest.get('status', 'Inactive')
@@ -42,13 +47,13 @@ class QuestController:
         title = dialog.get_input()
         if not title: return
         new_quest = self.model.create_quest(title)
-        self.all_quests.append(new_quest)
-        self.model.save_all_quests(self.all_quests)
+        self.model.save_quest(new_quest)
         self.load_all_quests()
         self.select_quest(new_quest)
 
     def select_quest(self, quest):
         self.selected_quest = quest
+        
         if not self.view.editor_is_built:
             self.view.build_quest_editor(self)
         self.view.populate_editor(quest)
@@ -62,24 +67,31 @@ class QuestController:
     
     def save_changes(self):
         if not self.selected_quest: return
+        
         original_title = self.selected_quest['title']
         original_status = self.selected_quest['status']
-        for quest in self.all_quests:
-            if quest['id'] == self.selected_quest['id']:
-                quest['title'] = self.view.title_entry.get()
-                quest['status'] = self.view.status_combo.get()
-                quest['description'] = self.view.desc_text.get("1.0", "end-1c")
-                break
-        self.model.save_all_quests(self.all_quests)
-        if original_title != quest['title'] or original_status != quest['status']:
+
+        self.selected_quest['title'] = self.view.title_entry.get()
+        self.selected_quest['status'] = self.view.status_combo.get()
+        self.selected_quest['description'] = self.view.desc_text.get("1.0", "end-1c")
+        
+        self.model.save_quest(self.selected_quest)
+        
+        if original_title != self.selected_quest['title'] or original_status != self.selected_quest['status']:
             self.load_all_quests()
+        else:
+            # Refresh the all_quests list in memory without a full UI rebuild
+            for i, q in enumerate(self.all_quests):
+                if q['id'] == self.selected_quest['id']:
+                    self.all_quests[i] = self.selected_quest
+                    break
+
         MessageBox.showinfo("Success", "Quest changes have been saved.", self.view.frame)
 
     def delete_quest(self):
         if not self.selected_quest: return
         if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete '{self.selected_quest['title']}'?", self.view.frame):
-            self.all_quests = [q for q in self.all_quests if q['id'] != self.selected_quest['id']]
-            self.model.save_all_quests(self.all_quests)
+            self.model.delete_quest(self.selected_quest['id'])
             self.selected_quest = None
             self.load_all_quests()
             self.view.clear_editor()

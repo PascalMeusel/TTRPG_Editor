@@ -1,26 +1,38 @@
 import json
-import os
 import uuid
+from database import Database
 
 class QuestModel:
     """Manages the quest database for a specific campaign."""
     def __init__(self, campaign_path):
-        self.filepath = os.path.join(campaign_path, 'quests.json')
+        self.db = Database(campaign_path)
 
     def load_all_quests(self):
-        """Loads the entire list of quests from quests.json."""
-        if not os.path.exists(self.filepath):
+        """Loads the entire list of quests from the database."""
+        self.db.connect()
+        rows = self.db.fetchall("SELECT data FROM quests")
+        self.db.close()
+        if not rows:
             return []
-        with open(self.filepath, 'r') as f:
-            try:
-                return json.load(f)
-            except json.JSONDecodeError:
-                return []
+        try:
+            return [json.loads(row['data']) for row in rows]
+        except json.JSONDecodeError:
+            return []
 
-    def save_all_quests(self, quests_list):
-        """Saves the entire list of quests to quests.json."""
-        with open(self.filepath, 'w') as f:
-            json.dump(quests_list, f, indent=4)
+    def save_quest(self, quest_data):
+        """Saves a single quest to the database."""
+        self.db.connect()
+        self.db.execute(
+            "INSERT OR REPLACE INTO quests (id, data) VALUES (?, ?)",
+            (quest_data['id'], json.dumps(quest_data))
+        )
+        self.db.close()
+
+    def delete_quest(self, quest_id):
+        """Deletes a single quest from the database."""
+        self.db.connect()
+        self.db.execute("DELETE FROM quests WHERE id = ?", (quest_id,))
+        self.db.close()
 
     def create_quest(self, title):
         """Creates a new quest dictionary with default values."""

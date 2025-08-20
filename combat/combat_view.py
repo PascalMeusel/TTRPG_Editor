@@ -3,13 +3,19 @@ import customtkinter as ctk
 class CombatView:
     """Manages the UI for the new Combat Tracker feature."""
     def __init__(self, parent_frame):
-        self.frame = parent_frame
+        self.parent_frame = parent_frame
         self.roster_buttons = {}
-        self.frame.grid_columnconfigure(0, weight=1)
-        self.frame.grid_rowconfigure(0, weight=1)
+        # This will be assigned in setup_ui
+        self.frame = None
 
     def setup_ui(self, controller):
         """Builds the initial UI layout."""
+        # --- FIX: Assign self.frame and configure the parent grid ---
+        self.frame = self.parent_frame
+        self.frame.grid_columnconfigure(0, weight=1)
+        self.frame.grid_rowconfigure(0, weight=1)
+
+        # --- FIX: Create all widgets as children of self.frame ---
         self.main_pane = ctk.CTkFrame(self.frame, fg_color="transparent")
         self.main_pane.grid(row=0, column=0, sticky="nsew", padx=10, pady=10)
         self.main_pane.grid_columnconfigure(0, weight=1)

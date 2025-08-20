@@ -1,6 +1,7 @@
 import os
 import json
 from utils import resource_path # Import the helper
+from database import Database
 
 class CampaignModel:
     """Manages the creation and listing of campaign save files."""
@@ -24,6 +25,11 @@ class CampaignModel:
         os.makedirs(os.path.join(campaign_path, "characters"))
         os.makedirs(os.path.join(campaign_path, "npcs"))
         os.makedirs(os.path.join(campaign_path, "maps"))
+
+        # --- NEW: Initialize the database for the new campaign ---
+        db = Database(campaign_path)
+        db.connect() # This will create the file and the schema
+        db.close()
 
         # Create a metadata file to store the chosen ruleset
         metadata = {"ruleset": ruleset_name}

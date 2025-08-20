@@ -6,19 +6,49 @@ from quest.quest_controller import QuestController
 class NpcView:
     """Manages the UI for the self-contained NPC feature."""
     def __init__(self, parent_frame):
-        self.frame = ctk.CTkTabview(parent_frame, fg_color="transparent")
-        self.frame.pack(fill="both", expand=True, padx=5, pady=5)
+        self.parent_frame = parent_frame
+        self.npc_creator_entries = {}
+        self.npc_sheet_entries = {}
+        # --- NEW: Flags to track if a tab's UI has been built ---
+        self.creator_ui_built = False
+        self.sheet_ui_built = False
+        self.controller = None
+
+    def setup_ui(self, controller):
+        self.controller = controller
+        self.parent_frame.grid_rowconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(0, weight=1)
+
+        # --- MODIFIED: The command will now lazy-load the tabs ---
+        self.frame = ctk.CTkTabview(self.parent_frame, fg_color="transparent", command=self._on_tab_selected)
+        self.frame.grid(row=0, column=0, sticky="nsew", padx=5, pady=5)
 
         self.creator_tab = self.frame.add("Creator")
         self.sheet_tab = self.frame.add("Sheet")
         
-        self.npc_creator_entries = {}
-        self.npc_sheet_entries = {}
-        self.sheet_is_built = False
+        # --- NEW: Manually trigger the build for the default tab ---
+        self._on_tab_selected()
 
-    def setup_ui(self, controller):
-        self._setup_creator_ui(controller)
-        self.setup_sheet_ui(controller)
+    def _on_tab_selected(self):
+        """Called when the user clicks a tab. Builds the UI for that tab if it's the first time."""
+        selected_tab = self.frame.get()
+
+        if selected_tab == "Creator" and not self.creator_ui_built:
+            print("Lazy building NPC Creator UI...")
+            self._setup_creator_ui(self.controller)
+            self.creator_ui_built = True
+            if self.controller.current_rule_set:
+                self.build_dynamic_fields(self.controller.current_rule_set)
+
+        elif selected_tab == "Sheet" and not self.sheet_ui_built:
+            print("Lazy building NPC Sheet UI...")
+            self._setup_sheet_ui(self.controller)
+            self.sheet_ui_built = True
+            if self.controller.current_rule_set:
+                self.build_sheet_ui(self.controller.current_rule_set, self.controller)
+                self.update_npc_sheet_list(
+                    [npc.name for npc in self.controller.get_npc_list()]
+                )
 
     def _setup_creator_ui(self, controller):
         container = ctk.CTkFrame(self.creator_tab, fg_color="transparent")
@@ -89,7 +119,7 @@ class NpcView:
         self.generated_items_list.delete("1.0", "end")
         self.generated_items_list.configure(state="disabled")
 
-    def setup_sheet_ui(self, controller):
+    def _setup_sheet_ui(self, controller):
         container = ctk.CTkFrame(self.sheet_tab, fg_color="transparent")
         container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=1)
@@ -105,6 +135,7 @@ class NpcView:
         self.sheet_content_frame.grid(row=1, column=0, pady=10, padx=20, sticky="nsew")
 
     def build_dynamic_fields(self, rule_set):
+        if not self.creator_ui_built: return
         for widget in self.npc_creator_fields_frame.winfo_children():
             widget.destroy()
         self.npc_creator_entries.clear()
@@ -129,6 +160,7 @@ class NpcView:
         container.pack(fill="both", expand=True)
 
     def build_sheet_ui(self, rule_set, controller):
+        if not self.sheet_ui_built: return
         self.clear_sheet()
         self.npc_sheet_entries.clear()
         self.sheet_content_wrapper = ctk.CTkFrame(self.sheet_content_frame, fg_color="transparent")
@@ -152,9 +184,9 @@ class NpcView:
         gm_pane = ctk.CTkFrame(self.sheet_content_wrapper)
         gm_pane.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
         gm_pane.grid_columnconfigure(0, weight=1)
-        gm_pane.grid_rowconfigure(1, weight=2) # Notes expand
-        gm_pane.grid_rowconfigure(3, weight=1) # Inventory expand
-        gm_pane.grid_rowconfigure(5, weight=1) # Quests expand
+        gm_pane.grid_rowconfigure(1, weight=2)
+        gm_pane.grid_rowconfigure(3, weight=1)
+        gm_pane.grid_rowconfigure(5, weight=1)
 
         all_stat_keys = rule_set['attributes'] + list(rule_set['skills'].keys())
         for key in all_stat_keys:
@@ -186,12 +218,11 @@ class NpcView:
         button_frame.grid(row=2, column=0, columnspan=2, pady=20)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_npc_sheet).pack(side="left", padx=10)
         ctk.CTkButton(button_frame, text="Delete NPC", command=controller.delete_current_npc, fg_color="#D2691E", hover_color="#B2590E").pack(side="left", padx=10)
-        self.sheet_is_built = True
 
     def display_sheet_data(self, npc, item_controller, npc_controller):
-        if not self.sheet_is_built: return
+        if not self.sheet_ui_built: return
+        self.sheet_content_wrapper.pack(fill="both", expand=True)
         self.sheet_name_label.configure(text=npc.name)
-        
         effective_attrs = npc.attributes.copy()
         if item_controller:
             all_items_data = {item['id']: item for item in item_controller.all_items}
@@ -201,43 +232,30 @@ class NpcView:
                     if item_id in all_items_data:
                         item_details = all_items_data[item_id]
                         for modifier in item_details.get("modifiers", []):
-                            stat = modifier["stat"]
-                            value = modifier["value"]
+                            stat, value = modifier["stat"], modifier["value"]
                             if stat in effective_attrs:
-                                try:
-                                    current_val = int(effective_attrs.get(stat, 0))
-                                    effective_attrs[stat] = str(current_val + value)
+                                try: effective_attrs[stat] = str(int(effective_attrs.get(stat, 0)) + value)
                                 except ValueError: pass
-        
         base_max_hp_str = npc.attributes.get("Hit Points", "10")
         effective_max_hp_str = effective_attrs.get("Hit Points", base_max_hp_str)
-        hp_display_text = base_max_hp_str
-        if effective_max_hp_str != base_max_hp_str:
-            hp_display_text = f"{effective_max_hp_str} ({base_max_hp_str})"
+        hp_display_text = base_max_hp_str if effective_max_hp_str == base_max_hp_str else f"{effective_max_hp_str} ({base_max_hp_str})"
         self.max_hp_label.configure(text=hp_display_text)
         self.current_hp_entry.delete(0, 'end')
         self.current_hp_entry.insert(0, str(npc.current_hp))
-        
         for key, entry in self.npc_sheet_entries.items():
             base_value = npc.attributes.get(key) or npc.skills.get(key) or ""
             effective_value = effective_attrs.get(key)
-            display_text = base_value
-            if effective_value and effective_value != base_value:
-                 display_text = f"{effective_value} ({base_value})"
+            display_text = base_value if not effective_value or effective_value == base_value else f"{effective_value} ({base_value})"
             entry.delete(0, 'end')
             entry.insert(0, display_text)
-        
         self.sheet_notes_text.delete("1.0", "end")
         self.sheet_notes_text.insert("1.0", npc.gm_notes)
-        
         quest_controller = npc_controller.app_controller.get_loaded_controller(QuestController)
         self.display_linked_quests(npc.name, quest_controller)
         self.display_inventory(npc.inventory, item_controller, npc_controller)
-        self.sheet_content_wrapper.pack(fill="both", expand=True)
 
     def display_linked_quests(self, npc_name, quest_controller):
-        for widget in self.linked_quests_frame.winfo_children():
-            widget.destroy()
+        for widget in self.linked_quests_frame.winfo_children(): widget.destroy()
         if not quest_controller:
             ctk.CTkLabel(self.linked_quests_frame, text="Open 'Quests' pane\nto see links.", wraplength=150).pack(pady=10)
             return
@@ -250,8 +268,7 @@ class NpcView:
                 quest_label.pack(fill="x", pady=2)
 
     def display_inventory(self, inventory_list, item_controller, npc_controller):
-        for widget in self.inventory_list_frame.winfo_children():
-            widget.destroy()
+        for widget in self.inventory_list_frame.winfo_children(): widget.destroy()
         if not item_controller:
             ctk.CTkLabel(self.inventory_list_frame, text="Open 'Items' pane\nto manage inventory.", wraplength=150).pack(pady=10)
             return
@@ -263,28 +280,26 @@ class NpcView:
                 item_details = all_items_data[item_id]
                 item_row = ctk.CTkFrame(self.inventory_list_frame)
                 item_row.pack(fill="x", pady=2)
-                equip_checkbox = ctk.CTkCheckBox(item_row, text="", width=20,
-                                                 command=lambda i=inv_entry: npc_controller.toggle_item_equipped(i))
+                equip_checkbox = ctk.CTkCheckBox(item_row, text="", width=20, command=lambda i=inv_entry: npc_controller.toggle_item_equipped(i))
                 equip_checkbox.pack(side="left", padx=5)
-                if inv_entry.get("equipped", False):
-                    equip_checkbox.select()
-                else:
-                    equip_checkbox.deselect()
+                if inv_entry.get("equipped", False): equip_checkbox.select()
+                else: equip_checkbox.deselect()
                 label_text = f'{item_details["name"]} (x{inv_entry["quantity"]})'
                 ctk.CTkLabel(item_row, text=label_text, anchor="w").pack(side="left", expand=True, fill="x")
-                ctk.CTkButton(item_row, text="X", width=25, height=25, fg_color="#D2691E", hover_color="#B2590E",
-                              command=lambda i=inv_entry: npc_controller.remove_item_from_inventory(i)).pack(side="right", padx=5)
+                ctk.CTkButton(item_row, text="X", width=25, height=25, fg_color="#D2691E", hover_color="#B2590E", command=lambda i=inv_entry: npc_controller.remove_item_from_inventory(i)).pack(side="right", padx=5)
 
     def clear_sheet(self):
         if hasattr(self, 'sheet_content_wrapper'):
             self.sheet_content_wrapper.pack_forget()
 
     def update_npc_management_list(self, npcs):
+        if not self.creator_ui_built: return
         values = ["-"] + (npcs or [])
         self.npc_management_list.configure(values=values)
         self.npc_management_list.set(values[0])
         
     def update_npc_sheet_list(self, npcs):
+        if not self.sheet_ui_built: return
         values = ["-"] + (npcs or [])
         self.npc_sheet_list.configure(values=values)
         self.npc_sheet_list.set(values[0])

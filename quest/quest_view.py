@@ -50,15 +50,16 @@ class LinkSelectionDialog(ctk.CTkToplevel):
 
 class QuestView:
     def __init__(self, parent_frame):
-        self.frame = parent_frame
-        self.frame.grid_columnconfigure(0, weight=1)
-        self.frame.grid_columnconfigure(1, weight=2)
-        self.frame.grid_rowconfigure(0, weight=1)
+        self.parent_frame = parent_frame
         self.quest_buttons = {}
         self.editor_is_built = False
 
     def setup_ui(self, controller):
-        list_frame = ctk.CTkFrame(self.frame)
+        self.parent_frame.grid_columnconfigure(0, weight=1)
+        self.parent_frame.grid_columnconfigure(1, weight=2)
+        self.parent_frame.grid_rowconfigure(0, weight=1)
+        
+        list_frame = ctk.CTkFrame(self.parent_frame)
         list_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         list_frame.grid_rowconfigure(1, weight=1)
         list_frame.grid_columnconfigure(0, weight=1)
@@ -66,7 +67,7 @@ class QuestView:
         self.quest_list_scroll_frame = ctk.CTkScrollableFrame(list_frame, label_text="Quests by Status")
         self.quest_list_scroll_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
         
-        self.editor_frame = ctk.CTkFrame(self.frame, fg_color="transparent")
+        self.editor_frame = ctk.CTkFrame(self.parent_frame, fg_color="transparent")
         self.editor_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         self.editor_frame.grid_columnconfigure(0, weight=1)
         self.editor_frame.grid_rowconfigure(0, weight=1)

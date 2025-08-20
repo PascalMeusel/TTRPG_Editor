@@ -1,5 +1,5 @@
 import json
-import os
+from database import Database
 
 class CharacterModel:
     def __init__(self, campaign_path, name, rule_set_name):
@@ -9,17 +9,12 @@ class CharacterModel:
         self.attributes = {}
         self.skills = {}
         self.inventory = []
-        # --- NEW: Explicitly track current HP ---
-        self.current_hp = None 
-        self.data_dir = os.path.join(self.campaign_path, 'characters')
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
+        self.current_hp = None
 
     def set_attribute(self, attribute, value): self.attributes[attribute] = value
     def set_skill(self, skill, value): self.skills[skill] = value
 
     def to_dict(self):
-        # Ensure current_hp is set before saving
         if self.current_hp is None:
             self.current_hp = self.attributes.get("Hit Points", "10")
         return {
@@ -33,54 +28,51 @@ class CharacterModel:
         char = cls(campaign_path, data['name'], data['rule_set'])
         char.attributes = data.get('attributes', {})
         char.skills = data.get('skills', {})
-        
-        inventory_data = data.get('inventory', [])
-        for item_entry in inventory_data:
-            if 'equipped' not in item_entry: item_entry['equipped'] = False
-        char.inventory = inventory_data
-
-        # --- FIX: Load current_hp, defaulting to Max HP if not found ---
+        char.inventory = data.get('inventory', [])
         max_hp = char.attributes.get("Hit Points", "10")
         char.current_hp = data.get('current_hp', max_hp)
-
         return char
 
     def save(self):
-        """Saves the character data to a JSON file."""
-        filepath = os.path.join(self.data_dir, f"{self.name.lower().replace(' ', '_')}.json")
-        with open(filepath, 'w') as f:
-            json.dump(self.to_dict(), f, indent=4)
+        """Saves the character data to the database."""
+        db = Database(self.campaign_path)
+        db.connect()
+        char_id = self.name.lower().replace(' ', '_')
+        data_json = json.dumps(self.to_dict())
+        db.execute(
+            "INSERT OR REPLACE INTO characters (id, name, rule_set, data) VALUES (?, ?, ?, ?)",
+            (char_id, self.name, self.rule_set_name, data_json)
+        )
+        db.close()
 
     @staticmethod
     def load(campaign_path, character_name):
-        data_dir = os.path.join(campaign_path, 'characters')
-        filepath = os.path.join(data_dir, f"{character_name.lower().replace(' ', '_')}.json")
-        if not os.path.exists(filepath): return None
-        with open(filepath, 'r') as f:
-            data = json.load(f)
+        """Loads a single character from the database by name."""
+        db = Database(campaign_path)
+        db.connect()
+        char_id = character_name.lower().replace(' ', '_')
+        row = db.fetchone("SELECT data FROM characters WHERE id = ?", (char_id,))
+        db.close()
+        if row:
+            data = json.loads(row['data'])
             return CharacterModel.from_dict(campaign_path, data)
+        return None
 
     @staticmethod
-    def get_for_ruleset(campaign_path, rule_set_name):
-        data_dir = os.path.join(campaign_path, 'characters')
-        if not os.path.exists(data_dir): return []
-        valid_characters = []
-        for filename in os.listdir(data_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(data_dir, filename)
-                try:
-                    with open(filepath, 'r') as f:
-                        data = json.load(f)
-                        if data.get('rule_set') == rule_set_name:
-                            valid_characters.append(data.get('name'))
-                except (json.JSONDecodeError, KeyError): continue
-        return sorted(valid_characters)
+    def get_all_for_ruleset(campaign_path, rule_set_name):
+        """Loads all characters for a ruleset in a single query."""
+        db = Database(campaign_path)
+        db.connect()
+        rows = db.fetchall("SELECT data FROM characters WHERE rule_set = ?", (rule_set_name,))
+        db.close()
+        return [CharacterModel.from_dict(campaign_path, json.loads(row['data'])) for row in rows]
 
     @staticmethod
     def delete(campaign_path, character_name):
-        data_dir = os.path.join(campaign_path, 'characters')
-        filepath = os.path.join(data_dir, f"{character_name.lower().replace(' ', '_')}.json")
-        if os.path.exists(filepath):
-            os.remove(filepath)
-            return True
-        return False
+        """Deletes a character from the database."""
+        db = Database(campaign_path)
+        db.connect()
+        char_id = character_name.lower().replace(' ', '_')
+        db.execute("DELETE FROM characters WHERE id = ?", (char_id,))
+        db.close()
+        return True

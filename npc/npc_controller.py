@@ -15,7 +15,9 @@ class NpcController:
         self.current_rule_set = None
         self.current_npc = None
         self.generated_npc_data = None
-        self.view.setup_ui(self)
+
+        # --- LAZY LOAD: Load data when controller is created ---
+        self.app_controller._reload_npc_cache()
 
     def get_item_controller(self):
         return self.app_controller.get_loaded_controller(ItemController)
@@ -25,7 +27,8 @@ class NpcController:
 
     def get_npc_list(self):
         if self.current_rule_set:
-            return NpcModel.get_for_ruleset(self.campaign_path, self.current_rule_set['name'])
+            cache_key = f"npcs_models_{self.current_rule_set['name']}"
+            return self.app_controller.get_cached_data(cache_key) or []
         return []
 
     def handle_rule_set_load(self, rule_set):
@@ -38,14 +41,16 @@ class NpcController:
     def update_npc_management_list(self):
         if self.current_rule_set:
             npcs = self.get_npc_list()
-            self.view.update_npc_management_list(npcs)
+            npc_names = [npc.name for npc in npcs]
+            self.view.update_npc_management_list(npc_names)
         else:
             self.view.update_npc_management_list([])
             
     def update_npc_sheet_list(self):
         if self.current_rule_set:
             npcs = self.get_npc_list()
-            self.view.update_npc_sheet_list(npcs)
+            npc_names = [npc.name for npc in npcs]
+            self.view.update_npc_sheet_list(npc_names)
         else:
             self.view.update_npc_sheet_list([])
         self.view.clear_sheet()
@@ -100,6 +105,7 @@ class NpcController:
                 npc.inventory.append({"item_id": item["id"], "quantity": 1, "equipped": True})
         npc.save()
         MessageBox.showinfo("Success", f"NPC '{name}' saved.", self.view.parent_frame)
+
         self.app_controller.on_character_or_npc_list_changed()
         self.view.clear_creator_fields()
         self.generated_npc_data = None
@@ -112,12 +118,12 @@ class NpcController:
         if MessageBox.askyesno("Confirm Deletion", f"Are you sure you want to permanently delete {npc_name}?", self.view.parent_frame):
             if NpcModel.delete(self.campaign_path, npc_name):
                 MessageBox.showinfo("Deleted", f"NPC '{npc_name}' has been deleted.", self.view.parent_frame)
+                
                 self.app_controller.on_character_or_npc_list_changed()
             else:
                 MessageBox.showerror("Error", f"Could not find file for NPC '{npc_name}'.", self.view.parent_frame)
 
     def load_npc_to_sheet(self, refresh=False):
-        # --- FIX: Get controllers, but allow them to be None ---
         item_controller = self.get_item_controller()
         quest_controller = self.get_quest_controller()
 

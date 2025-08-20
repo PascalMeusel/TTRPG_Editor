@@ -1,5 +1,5 @@
 import json
-import os
+from database import Database
 
 class NpcModel:
     """Model for managing NPC data within a specific campaign."""
@@ -13,9 +13,6 @@ class NpcModel:
         self.gm_notes = ""
         # NEW: Explicitly track current HP
         self.current_hp = None
-        self.data_dir = os.path.join(self.campaign_path, 'npcs')
-        if not os.path.exists(self.data_dir):
-            os.makedirs(self.data_dir)
 
     def to_dict(self):
         """Converts the NPC object to a dictionary for saving."""
@@ -49,45 +46,45 @@ class NpcModel:
         return npc
 
     def save(self):
-        """Saves the NPC data to a JSON file in the campaign's NPC folder."""
-        filepath = os.path.join(self.data_dir, f"{self.name.lower().replace(' ', '_')}.json")
-        with open(filepath, 'w') as f:
-            json.dump(self.to_dict(), f, indent=4)
+        """Saves the NPC data to the database."""
+        db = Database(self.campaign_path)
+        db.connect()
+        npc_id = self.name.lower().replace(' ', '_')
+        data_json = json.dumps(self.to_dict())
+        db.execute(
+            "INSERT OR REPLACE INTO npcs (id, name, rule_set, data) VALUES (?, ?, ?, ?)",
+            (npc_id, self.name, self.rule_set_name, data_json)
+        )
+        db.close()
 
     @staticmethod
     def load(campaign_path, npc_name):
-        """Loads an NPC's data from a specific campaign."""
-        data_dir = os.path.join(campaign_path, 'npcs')
-        filepath = os.path.join(data_dir, f"{npc_name.lower().replace(' ', '_')}.json")
-        if not os.path.exists(filepath): return None
-        with open(filepath, 'r') as f:
-            data = json.load(f)
+        """Loads a single NPC from the database by name."""
+        db = Database(campaign_path)
+        db.connect()
+        npc_id = npc_name.lower().replace(' ', '_')
+        row = db.fetchone("SELECT data FROM npcs WHERE id = ?", (npc_id,))
+        db.close()
+        if row:
+            data = json.loads(row['data'])
             return NpcModel.from_dict(campaign_path, data)
+        return None
 
     @staticmethod
-    def get_for_ruleset(campaign_path, rule_set_name):
-        """Gets NPCs for a ruleset from within a specific campaign."""
-        data_dir = os.path.join(campaign_path, 'npcs')
-        if not os.path.exists(data_dir): return []
-        
-        valid_npcs = []
-        for filename in os.listdir(data_dir):
-            if filename.endswith('.json'):
-                filepath = os.path.join(data_dir, filename)
-                try:
-                    with open(filepath, 'r') as f:
-                        data = json.load(f)
-                        if data.get('rule_set') == rule_set_name:
-                            valid_npcs.append(data.get('name'))
-                except (json.JSONDecodeError, KeyError): continue
-        return sorted(valid_npcs)
+    def get_all_for_ruleset(campaign_path, rule_set_name):
+        """--- OPTIMIZED: Loads all NPCs for a ruleset in a single query. ---"""
+        db = Database(campaign_path)
+        db.connect()
+        rows = db.fetchall("SELECT data FROM npcs WHERE rule_set = ?", (rule_set_name,))
+        db.close()
+        return [NpcModel.from_dict(campaign_path, json.loads(row['data'])) for row in rows]
 
     @staticmethod
     def delete(campaign_path, npc_name):
-        """Deletes an NPC's file from a specific campaign."""
-        data_dir = os.path.join(campaign_path, 'npcs')
-        filepath = os.path.join(data_dir, f"{npc_name.lower().replace(' ', '_')}.json")
-        if os.path.exists(filepath):
-            os.remove(filepath)
-            return True
-        return False
+        """Deletes an NPC from the database."""
+        db = Database(campaign_path)
+        db.connect()
+        npc_id = npc_name.lower().replace(' ', '_')
+        db.execute("DELETE FROM npcs WHERE id = ?", (npc_id,))
+        db.close()
+        return True
