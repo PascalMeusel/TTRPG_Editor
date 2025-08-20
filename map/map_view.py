@@ -1,14 +1,13 @@
 import customtkinter as ctk
 from PIL import Image, ImageTk, ImageDraw
 import os
+from ui_extensions import AutoWidthComboBox
 
 class MapView:
     """Manages the UI for the self-contained Map feature."""
     def __init__(self, parent_frame):
-        self.parent_frame = parent_frame
-        
-        self.tab_view = ctk.CTkTabview(parent_frame, fg_color="transparent")
-        self.tab_view.pack(fill="both", expand=True, padx=5, pady=5)
+        self.frame = ctk.CTkTabview(parent_frame, fg_color="transparent")
+        self.frame.pack(fill="both", expand=True, padx=5, pady=5)
         self.editor_tab = self.tab_view.add("Editor")
         self.viewer_tab = self.tab_view.add("Viewer")
 
@@ -26,83 +25,81 @@ class MapView:
         self.editor_tab.grid_columnconfigure(1, weight=1)
         self.editor_tab.grid_rowconfigure(0, weight=1)
         
-        toolbar = ctk.CTkFrame(self.editor_tab, width=200)
+        toolbar = ctk.CTkFrame(self.editor_tab, width=220)
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
         
+        # ... (Toolbar setup with .pack() is fine as it's self-contained) ...
         ctk.CTkButton(toolbar, text="New Map...", command=controller.show_new_map_dialog).pack(pady=10, padx=10, fill="x")
-
         ctk.CTkLabel(toolbar, text="Level Controls", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        self.editor_level_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
-        self.editor_level_frame.pack(fill="x", padx=10, pady=5)
-        self.editor_level_down_btn = ctk.CTkButton(self.editor_level_frame, text="Down", command=lambda: controller.change_level(-1))
+        editor_level_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        editor_level_frame.pack(fill="x", padx=10, pady=5)
+        self.editor_level_down_btn = ctk.CTkButton(editor_level_frame, text="Down", command=lambda: controller.change_level(-1))
         self.editor_level_down_btn.pack(side="left", expand=True, padx=2)
-        self.editor_level_label = ctk.CTkLabel(self.editor_level_frame, text="Lvl: 0", width=50)
+        self.editor_level_label = ctk.CTkLabel(editor_level_frame, text="Lvl: 0", width=50)
         self.editor_level_label.pack(side="left", expand=True)
-        self.editor_level_up_btn = ctk.CTkButton(self.editor_level_frame, text="Up", command=lambda: controller.change_level(1))
+        self.editor_level_up_btn = ctk.CTkButton(editor_level_frame, text="Up", command=lambda: controller.change_level(1))
         self.editor_level_up_btn.pack(side="left", expand=True, padx=2)
-        
         ctk.CTkLabel(toolbar, text="Editor Tools", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
         ctk.CTkButton(toolbar, text="Brush", command=lambda: controller.set_tool("brush")).pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Rectangle", command=lambda: controller.set_tool("rect")).pack(pady=5, padx=10, fill="x")
         self.color_var = ctk.StringVar(value="#999999")
         colors = {"Stone": "#999999", "Grass": "#6B8E23", "Water": "#4682B4", "Wood": "#8B4513"}
         for name, code in colors.items(): ctk.CTkRadioButton(toolbar, text=name, variable=self.color_var, value=code).pack(anchor="w", padx=20, pady=2)
-        
         ctk.CTkLabel(toolbar, text="Landmark Tool", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 5))
         self.landmark_text_entry = ctk.CTkEntry(toolbar, placeholder_text="Landmark Text...")
         self.landmark_text_entry.pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Place Landmark", command=lambda: controller.set_tool("landmark")).pack(pady=5, padx=10, fill="x")
-
         ctk.CTkLabel(toolbar, text="Map Properties", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 5))
         scale_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
         scale_frame.pack(fill="x", padx=10, pady=5)
         ctk.CTkLabel(scale_frame, text="Grid Scale (m):").pack(side="left")
         self.scale_entry = ctk.CTkEntry(scale_frame, width=60)
         self.scale_entry.pack(side="left", padx=5)
-
         ctk.CTkLabel(toolbar, text="Map Name:").pack(anchor="w", padx=10)
         self.map_name_entry = ctk.CTkEntry(toolbar)
         self.map_name_entry.pack(pady=(0,10), padx=10, fill="x")
-        
         ctk.CTkButton(toolbar, text="Save Map", command=controller.save_map).pack(side="bottom", pady=10, padx=10, fill="x")
         
         canvas_container = ctk.CTkScrollableFrame(self.editor_tab, label_text="Map Canvas")
         canvas_container.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         
+        # --- FIX: Configure the grid inside the scrollable frame ---
+        canvas_container.grid_columnconfigure(0, weight=1)
+        canvas_container.grid_rowconfigure(0, weight=1)
+
         self.editor_canvas = ctk.CTkCanvas(canvas_container, bg="#2B2B2B", highlightthickness=0)
         self.editor_canvas.bind("<B1-Motion>", controller.on_editor_canvas_drag)
         self.editor_canvas.bind("<ButtonPress-1>", controller.on_editor_canvas_press)
         self.editor_canvas.bind("<ButtonRelease-1>", controller.on_editor_canvas_release)
-        self.editor_canvas.pack()
+        # --- FIX: Use grid to place the canvas ---
+        self.editor_canvas.grid(row=0, column=0, sticky="nsew")
 
     def setup_viewer_ui(self, controller):
         """Builds the UI for the Map Viewer tab."""
         self.viewer_tab.grid_columnconfigure(1, weight=1)
         self.viewer_tab.grid_rowconfigure(0, weight=1)
-        toolbar = ctk.CTkFrame(self.viewer_tab, width=200)
+        
+        toolbar = ctk.CTkFrame(self.viewer_tab, width=220)
         toolbar.grid(row=0, column=0, sticky="ns", padx=10, pady=10)
-
+        # ... (Toolbar setup with .pack() is fine) ...
         ctk.CTkLabel(toolbar, text="Select Map:").pack(pady=(10, 5))
-        self.map_selection_list = ctk.CTkComboBox(toolbar, command=controller.load_map_for_viewing)
+        self.map_selection_list = AutoWidthComboBox(toolbar, command=controller.load_map_for_viewing)
         self.map_selection_list.pack(pady=5, padx=10, fill="x")
         self.map_selection_list.bind("<Button-1>", lambda event: self.map_selection_list._open_dropdown_menu())
-        
         ctk.CTkLabel(toolbar, text="Level Controls", font=ctk.CTkFont(weight="bold")).pack(pady=(10,0))
-        self.viewer_level_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
-        self.viewer_level_frame.pack(fill="x", padx=10, pady=5)
-        self.viewer_level_down_btn = ctk.CTkButton(self.viewer_level_frame, text="Down", command=lambda: controller.change_level(-1))
+        viewer_level_frame = ctk.CTkFrame(toolbar, fg_color="transparent")
+        viewer_level_frame.pack(fill="x", padx=10, pady=5)
+        self.viewer_level_down_btn = ctk.CTkButton(viewer_level_frame, text="Down", command=lambda: controller.change_level(-1))
         self.viewer_level_down_btn.pack(side="left", expand=True, padx=2)
-        self.viewer_level_label = ctk.CTkLabel(self.viewer_level_frame, text="Lvl: 0", width=50)
+        self.viewer_level_label = ctk.CTkLabel(viewer_level_frame, text="Lvl: 0", width=50)
         self.viewer_level_label.pack(side="left", expand=True)
-        self.viewer_level_up_btn = ctk.CTkButton(self.viewer_level_frame, text="Up", command=lambda: controller.change_level(1))
+        self.viewer_level_up_btn = ctk.CTkButton(viewer_level_frame, text="Up", command=lambda: controller.change_level(1))
         self.viewer_level_up_btn.pack(side="left", expand=True, padx=2)
-
         ctk.CTkLabel(toolbar, text="Token Tools", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 5))
-        self.token_placer_list = ctk.CTkComboBox(toolbar, values=["Load characters/npcs"])
+        self.token_placer_list = AutoWidthComboBox(toolbar, values=["Load characters/npcs"])
         self.token_placer_list.pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Place Token", command=lambda: controller.set_tool("place_token")).pack(pady=5, padx=10, fill="x")
         ctk.CTkButton(toolbar, text="Delete Selected", command=controller.delete_selected_tokens, fg_color="#D2691E", hover_color="#B2590E").pack(pady=5, padx=10, fill="x")
-        
         ctk.CTkLabel(toolbar, text="Token Actions", font=ctk.CTkFont(weight="bold")).pack(pady=(20, 5))
         ctk.CTkLabel(toolbar, text="Movement (m):").pack()
         self.movement_entry = ctk.CTkEntry(toolbar, width=80)
@@ -115,12 +112,17 @@ class MapView:
         canvas_container = ctk.CTkScrollableFrame(self.viewer_tab, label_text="Live Map")
         canvas_container.grid(row=0, column=1, sticky="nsew", padx=10, pady=10)
         
+        # --- FIX: Configure the grid inside the scrollable frame ---
+        canvas_container.grid_columnconfigure(0, weight=1)
+        canvas_container.grid_rowconfigure(0, weight=1)
+
         self.viewer_canvas = ctk.CTkCanvas(canvas_container, bg="#101010", highlightthickness=0)
         self.viewer_canvas.bind("<Button-1>", controller.on_viewer_canvas_press)
         self.viewer_canvas.bind("<B1-Motion>", controller.on_viewer_canvas_drag)
         self.viewer_canvas.bind("<ButtonRelease-1>", controller.on_viewer_canvas_release)
         self.viewer_canvas.bind("<Control-Button-1>", controller.on_viewer_canvas_ctrl_press)
-        self.viewer_canvas.pack()
+        # --- FIX: Use grid to place the canvas ---
+        self.viewer_canvas.grid(row=0, column=0, sticky="nsew")
 
     def clear_all_canvases(self):
         self.editor_canvas.delete("all")
@@ -172,10 +174,8 @@ class MapView:
         for i in range(0, height + 1, grid_size):
             canvas.create_line(0, i, width, i, tag="grid_line", fill="#444444")
 
-    # --- NEW: Helper method to draw landmark text ---
     def _draw_landmarks(self, canvas, map_model, current_level):
         if 'landmarks' not in map_model.levels[current_level]: return
-        
         grid_size = map_model.grid_size
         for landmark in map_model.levels[current_level]['landmarks']:
             x = (landmark['x'] + 0.5) * grid_size
@@ -188,30 +188,11 @@ class MapView:
         canvas_height = map_model.height * map_model.grid_size
         self.editor_canvas.configure(width=canvas_width, height=canvas_height)
         self.editor_canvas.delete("all")
-        
         for elem in map_model.levels[current_level]['elements']:
             coords = tuple(c * map_model.grid_size for c in elem['coords'])
             self.editor_canvas.create_rectangle(coords, fill=elem['color'], outline="")
-        
         self._draw_grid(self.editor_canvas, canvas_width, canvas_height, map_model.grid_size)
-        # --- NEW: Call the landmark drawing method ---
         self._draw_landmarks(self.editor_canvas, map_model, current_level)
-
-    def draw_static_background(self, map_model, current_level):
-        """Draws the map background and landmarks on the viewer canvas."""
-        canvas_width = map_model.width * map_model.grid_size
-        canvas_height = map_model.height * map_model.grid_size
-        self.viewer_canvas.configure(width=canvas_width, height=canvas_height)
-        self.viewer_canvas.delete("all")
-        if not map_model: return
-        
-        for elem in map_model.levels[current_level]['elements']:
-            coords = tuple(c * map_model.grid_size for c in elem['coords'])
-            self.viewer_canvas.create_rectangle(coords, fill=elem['color'], outline="")
-        
-        self._draw_grid(self.viewer_canvas, canvas_width, canvas_height, map_model.grid_size)
-        # --- NEW: Call the landmark drawing method ---
-        self._draw_landmarks(self.viewer_canvas, map_model, current_level)
 
     def draw_viewer_canvas(self, map_model, controller):
         self.viewer_canvas.delete("token", "overlay")
@@ -250,8 +231,9 @@ class MapView:
             self.viewer_canvas.create_line(x1, y1, x2, y2, fill="yellow", width=2, dash=(4, 4), tags="overlay")
 
     def update_token_placer_list(self, tokens):
-        self.token_placer_list.configure(values=tokens or ["Load characters/npcs"])
-        if tokens: self.token_placer_list.set(tokens[0])
+        values = tokens or ["Load characters/npcs"]
+        self.token_placer_list.configure(values=values)
+        if tokens: self.token_placer_list.set(values[0])
         else: self.token_placer_list.set("Load characters/npcs")
 
     def update_map_list(self, maps):
@@ -270,6 +252,7 @@ class MapView:
             coords = tuple(c * map_model.grid_size for c in elem['coords'])
             self.viewer_canvas.create_rectangle(coords, fill=elem['color'], outline="")
         self._draw_grid(self.viewer_canvas, canvas_width, canvas_height, map_model.grid_size)
+        self._draw_landmarks(self.viewer_canvas, map_model, current_level)
 
     def update_dimension_fields(self, map_model):
         self.scale_entry.delete(0, 'end')

@@ -3,15 +3,15 @@ import customtkinter as ctk
 class ItemView:
     """Manages the UI for the self-contained Item feature."""
     def __init__(self, parent_frame):
-        self.parent_frame = parent_frame
+        self.frame = parent_frame
+        self.frame.grid_columnconfigure(0, weight=1)
+        self.frame.grid_columnconfigure(1, weight=2)
+        self.frame.grid_rowconfigure(0, weight=1)
+
         self.modifier_widgets = {}
 
-        self.parent_frame.grid_columnconfigure(0, weight=1)
-        self.parent_frame.grid_columnconfigure(1, weight=2)
-        self.parent_frame.grid_rowconfigure(0, weight=1)
-
         # Left Pane: List of existing items
-        list_frame = ctk.CTkFrame(self.parent_frame)
+        list_frame = ctk.CTkFrame(self.frame)
         list_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
         list_frame.grid_rowconfigure(1, weight=1)
         ctk.CTkLabel(list_frame, text="Campaign Items", font=ctk.CTkFont(size=16, weight="bold")).grid(row=0, column=0, padx=10, pady=10)
@@ -19,7 +19,7 @@ class ItemView:
         self.item_list_frame.grid(row=1, column=0, padx=10, pady=10, sticky="nsew")
 
         # Right Pane: Editor for creating/editing an item
-        editor_frame = ctk.CTkFrame(self.parent_frame)
+        editor_frame = ctk.CTkFrame(self.frame)
         editor_frame.grid(row=0, column=1, padx=10, pady=10, sticky="nsew")
         editor_frame.grid_columnconfigure(0, weight=1)
         editor_frame.grid_rowconfigure(4, weight=1)

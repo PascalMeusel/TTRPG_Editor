@@ -3,6 +3,7 @@ from .character_model import CharacterModel
 from .character_view import CharacterView, AddItemDialog
 from custom_dialogs import MessageBox
 from item.item_controller import ItemController
+from quest.quest_controller import QuestController
 
 class CharacterController:
     def __init__(self, app_controller, parent_frame, campaign_path):
@@ -15,6 +16,9 @@ class CharacterController:
 
     def get_item_controller(self):
         return self.app_controller.get_loaded_controller(ItemController)
+
+    def get_quest_controller(self):
+        return self.app_controller.get_loaded_controller(QuestController)
 
     def get_character_list(self):
         if self.current_rule_set:
@@ -51,10 +55,7 @@ class CharacterController:
                 char.set_attribute(key, value)
             elif key in self.current_rule_set['skills']:
                 char.set_skill(key, value)
-        
-        # Set current HP to max HP on creation
         char.current_hp = char.attributes.get("Hit Points", "10")
-        
         char.save()
         MessageBox.showinfo("Success", f"Character '{name}' saved.", self.view.parent_frame)
         self.app_controller.on_character_or_npc_list_changed()
@@ -63,30 +64,30 @@ class CharacterController:
             entry.delete(0, 'end')
 
     def load_character_to_sheet(self, refresh=False):
+        """Loads a selected character into the sheet view."""
+        # --- FIX: Remove the blocking error. Get controllers, but allow None. ---
         item_controller = self.get_item_controller()
-        if not item_controller:
-            MessageBox.showerror("Error", "The Item Editor must be open to manage inventory.", self.view.parent_frame)
-            return
+        
         char_name = self.current_character.name if (refresh and self.current_character) else self.view.char_sheet_list.get().strip()
         if not char_name or char_name == "-":
             self.current_character = None
             self.view.clear_sheet()
             return
+            
         self.current_character = CharacterModel.load(self.campaign_path, char_name)
         if not self.current_character:
             MessageBox.showerror("Error", f"Could not load character: {char_name}", self.view.parent_frame)
             return
+            
+        # The view will handle the case where item_controller is None
         self.view.display_sheet_data(self.current_character, item_controller, self)
+        
         if not refresh:
             self.app_controller.set_dirty_flag(False)
 
     def save_character_sheet(self):
         if not self.current_character: return
-        
-        # Save current HP
         self.current_character.current_hp = self.view.current_hp_entry.get()
-        
-        # Save other stats
         for key, entry in self.view.char_sheet_entries.items():
             full_value = entry.get()
             if "(" in full_value and full_value.endswith(")"):
@@ -97,7 +98,6 @@ class CharacterController:
                 self.current_character.set_attribute(key, base_value)
             elif key in self.current_character.skills:
                 self.current_character.set_skill(key, base_value)
-        
         self.current_character.save()
         self.app_controller.set_dirty_flag(False)
         MessageBox.showinfo("Success", f"Changes to '{self.current_character.name}' saved.", self.view.parent_frame)
@@ -116,11 +116,14 @@ class CharacterController:
                 MessageBox.showerror("Error", f"Could not find file for character '{char_name}'.", self.view.parent_frame)
 
     def show_add_item_dialog(self):
+        """Opens the dialog to add an item to the current character's inventory."""
         if not self.current_character: return
         item_controller = self.get_item_controller()
+        # --- FIX: Keep the check here, as you can't *add* items if the pane isn't open ---
         if not item_controller:
-            MessageBox.showerror("Error", "The Item Editor must be open to add items.", self.view.parent_frame)
+            MessageBox.showerror("Error", "The 'Items' feature must be open in a pane to add items.", self.view.parent_frame)
             return
+        
         dialog = AddItemDialog(parent=self.view.parent_frame, all_items=item_controller.all_items)
         selected_item = dialog.get_selection()
         if selected_item:

@@ -9,6 +9,7 @@ from combat.combat_controller import CombatController
 from music.music_controller import MusicController
 from map.map_controller import MapController
 from item.item_controller import ItemController
+from quest.quest_controller import QuestController
 
 from campaign_model import CampaignModel
 from main_menu_view import MainMenuView, NewCampaignDialog
@@ -26,17 +27,18 @@ class AppController:
         self.editor_frame = None
         self.unsaved_changes = False
         self.ruleset_data = None
-        self.left_pane_content = None
-        self.right_pane_content = None
         self.left_pane_pinned = False
         self.right_pane_pinned = False
         self.last_active_pane = "right"
-        self.feature_cache = {}
         self.is_map_fullscreen = False
-        self.left_pane_feature_name = None
-        self.right_pane_feature_name = None
+        
+        self.feature_cache = {}
+        self.pane_containers = {"left": {}, "right": {}, "fullscreen": {}}
+        self.left_pane_feature_name = "Characters"
+        self.right_pane_feature_name = "Items"
         self.pre_map_left_pane_feature = "Characters"
         self.pre_map_right_pane_feature = "Items"
+
         self.main_menu_view = MainMenuView(root, self)
         self.show_main_menu()
 
@@ -53,12 +55,11 @@ class AppController:
         if self.editor_frame:
             self.editor_frame.destroy()
         self.editor_frame = None
-        self.left_pane_content = None
-        self.right_pane_content = None
         self.ruleset_data = None
         self.left_pane_pinned = False
         self.right_pane_pinned = False
         self.feature_cache.clear()
+        self.pane_containers = {"left": {}, "right": {}, "fullscreen": {}}
         self.is_map_fullscreen = False
 
     def _show_editor(self):
@@ -66,6 +67,7 @@ class AppController:
         if self.editor_frame is None:
             self.unsaved_changes = False
             self.feature_cache = {}
+            self.pane_containers = {"left": {}, "right": {}, "fullscreen": {}}
             self.editor_frame = ctk.CTkFrame(self.root, fg_color="transparent")
             self.editor_frame.pack(fill="both", expand=True)
             self.editor_frame.grid_columnconfigure(1, weight=1)
@@ -83,14 +85,17 @@ class AppController:
             sidebar_frame.grid_rowconfigure(0, weight=1)
             self.main_content_area = ctk.CTkFrame(self.editor_frame, fg_color="transparent")
             self.main_content_area.grid(row=1, column=1, sticky="nsew")
+            self.main_content_area.grid_columnconfigure(0, weight=1)
+            self.main_content_area.grid_rowconfigure(0, weight=1)
             self.paned_window = tk.PanedWindow(self.main_content_area, orient=tk.HORIZONTAL, sashwidth=10, bg="#2B2B2B", bd=0, relief="raised", sashrelief=tk.RAISED)
+            self.paned_window.grid(row=0, column=0, sticky="nsew")
             self.left_pane_wrapper = ctk.CTkFrame(self.paned_window, fg_color="gray14", corner_radius=0, border_width=2, border_color="gray25")
             self.left_pane_wrapper.grid_columnconfigure(0, weight=1)
             self.left_pane_wrapper.grid_rowconfigure(1, weight=1)
             self.paned_window.add(self.left_pane_wrapper, minsize=400)
             left_header = ctk.CTkFrame(self.left_pane_wrapper, fg_color="gray20", corner_radius=0, height=35)
             left_header.grid(row=0, column=0, sticky="ew")
-            self.left_pane_label = ctk.CTkLabel(left_header, text="Left Pane", anchor="w")
+            self.left_pane_label = ctk.CTkLabel(left_header, text="Characters", anchor="w")
             self.left_pane_label.pack(side="left", padx=10, pady=5)
             self.left_pin_button = ctk.CTkButton(left_header, text="📌", width=30, fg_color="transparent", command=lambda: self.toggle_pin("left"))
             self.left_pin_button.pack(side="right", padx=5, pady=5)
@@ -104,7 +109,7 @@ class AppController:
             self.paned_window.add(self.right_pane_wrapper, minsize=400)
             right_header = ctk.CTkFrame(self.right_pane_wrapper, fg_color="gray20", corner_radius=0, height=35)
             right_header.grid(row=0, column=0, sticky="ew")
-            self.right_pane_label = ctk.CTkLabel(right_header, text="Right Pane", anchor="w")
+            self.right_pane_label = ctk.CTkLabel(right_header, text="Items", anchor="w")
             self.right_pane_label.pack(side="left", padx=10, pady=5)
             self.right_pin_button = ctk.CTkButton(right_header, text="📌", width=30, fg_color="transparent", command=lambda: self.toggle_pin("right"))
             self.right_pin_button.pack(side="right", padx=5, pady=5)
@@ -113,11 +118,12 @@ class AppController:
             self.right_pane_frame.grid_rowconfigure(0, weight=1)
             self.right_pane_frame.grid_columnconfigure(0, weight=1)
             self.fullscreen_map_frame = ctk.CTkFrame(self.main_content_area, fg_color="transparent")
-            self.paned_window.pack(fill="both", expand=True)
+            self.fullscreen_map_frame.grid_rowconfigure(0, weight=1)
+            self.fullscreen_map_frame.grid_columnconfigure(0, weight=1)
             self.music_controller = MusicController(self, header_right)
             sidebar_nav_frame = ctk.CTkFrame(sidebar_frame, fg_color="transparent")
             sidebar_nav_frame.grid(row=0, column=0, sticky="new", padx=5, pady=5)
-            page_names = ["Characters", "NPCs", "Items", "Combat", "Map Editor"]
+            page_names = ["Characters", "NPCs", "Items", "Quests", "Combat", "Map Editor"]
             for name in page_names:
                 button = ctk.CTkButton(sidebar_nav_frame, text=name, corner_radius=0, fg_color="transparent", height=40, anchor="w")
                 button.pack(fill="x")
@@ -131,15 +137,24 @@ class AppController:
                 if self.ruleset_data:
                     campaign_name = os.path.basename(self.current_campaign_path)
                     self.header_label.configure(text=f"{campaign_name}  |  Ruleset: {ruleset_name}")
+                    self._build_all_feature_containers()
                 else:
                     MessageBox.showerror("Error", f"Failed to load required ruleset '{ruleset_name}'.", self.root)
                     self.show_main_menu()
                     return
             self.root.after(100, lambda: self.paned_window.sash_place(0, self.paned_window.winfo_width() // 2, 0))
-            self.load_feature_into_pane("Characters", "left")
-            self.load_feature_into_pane("Items", "right")
+            self._redisplay_panes()
         self.editor_frame.pack(fill="both", expand=True)
         self.editor_frame.tkraise()
+
+    def _build_all_feature_containers(self):
+        page_names = ["Characters", "NPCs", "Items", "Quests", "Combat", "Map Editor"]
+        for name in page_names:
+            if name == "Map Editor":
+                self.pane_containers['fullscreen'][name] = ctk.CTkFrame(self.fullscreen_map_frame, fg_color="transparent")
+            else:
+                self.pane_containers['left'][name] = ctk.CTkFrame(self.left_pane_frame, fg_color="transparent")
+                self.pane_containers['right'][name] = ctk.CTkFrame(self.right_pane_frame, fg_color="transparent")
 
     def toggle_pin(self, pane):
         if pane == "left":
@@ -156,7 +171,7 @@ class AppController:
                 self.left_pin_button.configure(fg_color="transparent")
 
     def load_feature(self, feature_name):
-        if feature_name == self.left_pane_feature_name or feature_name == self.right_pane_feature_name:
+        if feature_name in [self.left_pane_feature_name, self.right_pane_feature_name] and not self.is_map_fullscreen:
             return
         if self.left_pane_pinned and self.right_pane_pinned:
             MessageBox.showinfo("Info", "Both panes are pinned. Unpin one to load a new feature.", self.root)
@@ -173,83 +188,80 @@ class AppController:
         context_menu.tk_popup(event.x_root, event.y_root)
 
     def load_feature_into_pane(self, feature_name, pane_target):
-        if (pane_target == "left" and feature_name == self.left_pane_feature_name) or \
-           (pane_target == "right" and feature_name == self.right_pane_feature_name):
-            return
         if feature_name == "Map Editor":
             if not self.is_map_fullscreen: self._enter_fullscreen_map_mode()
             return
-        elif self.is_map_fullscreen: self._exit_fullscreen_map_mode()
-        
-        target_frame = self.left_pane_frame if pane_target == "left" else self.right_pane_frame
-        target_label = self.left_pane_label if pane_target == "left" else self.right_pane_label
-        
-        for widget in target_frame.winfo_children():
-            widget.grid_forget()
+        elif self.is_map_fullscreen:
+            self._exit_fullscreen_map_mode()
+            if feature_name != "Map Editor": self.load_feature(feature_name)
+            return
 
-        if pane_target == "left": self.left_pane_content = None
-        else: self.right_pane_content = None
+        if pane_target == "left" and feature_name == self.right_pane_feature_name:
+            self.right_pane_feature_name = self.left_pane_feature_name
+        elif pane_target == "right" and feature_name == self.left_pane_feature_name:
+            self.left_pane_feature_name = self.right_pane_feature_name
 
-        if feature_name in self.feature_cache:
-            cached_feature = self.feature_cache[feature_name]
-            content = cached_feature['controller']
-            feature_container = cached_feature['container']
-            feature_container.grid(in_=target_frame, row=0, column=0, sticky="nsew")
+        if pane_target == "left":
+            self.left_pane_feature_name = feature_name
         else:
-            feature_container = ctk.CTkFrame(target_frame, fg_color="transparent")
-            feature_container.grid(row=0, column=0, sticky="nsew")
+            self.right_pane_feature_name = feature_name
+        
+        self.last_active_pane = pane_target
+        self._redisplay_panes()
+
+    def _redisplay_panes(self):
+        """Hides all containers, then shows the two currently active ones."""
+        for pane_dict in self.pane_containers.values():
+            for container in pane_dict.values():
+                container.grid_forget()
+
+        self._ensure_and_display_feature(self.left_pane_feature_name, "left")
+        self._ensure_and_display_feature(self.right_pane_feature_name, "right")
+
+    def _ensure_and_display_feature(self, feature_name, pane_target):
+        """Creates a feature if it's the first time, then displays it in the target pane."""
+        if not feature_name: return
+        
+        target_frame = self.pane_containers[pane_target][feature_name]
+        target_label = self.left_pane_label if pane_target == 'left' else self.right_pane_label
+        
+        if feature_name not in self.feature_cache:
             content = None
-            if feature_name == "Characters": content = CharacterController(self, feature_container, self.current_campaign_path)
-            elif feature_name == "NPCs": content = NpcController(self, feature_container, self.current_campaign_path)
-            elif feature_name == "Items": content = ItemController(self, feature_container, self.current_campaign_path)
-            elif feature_name == "Combat": content = CombatController(self, feature_container, self.current_campaign_path)
+            if feature_name == "Characters": content = CharacterController(self, target_frame, self.current_campaign_path)
+            elif feature_name == "NPCs": content = NpcController(self, target_frame, self.current_campaign_path)
+            elif feature_name == "Items": content = ItemController(self, target_frame, self.current_campaign_path)
+            elif feature_name == "Quests": content = QuestController(self, target_frame, self.current_campaign_path)
+            elif feature_name == "Combat": content = CombatController(self, target_frame, self.current_campaign_path)
+            elif feature_name == "Map Editor": content = MapController(self, target_frame, self.current_campaign_path)
+            
             if content:
-                self.feature_cache[feature_name] = {'controller': content, 'container': feature_container}
+                self.feature_cache[feature_name] = content
                 if hasattr(content, 'handle_rule_set_load') and self.ruleset_data:
                     content.handle_rule_set_load(self.ruleset_data)
-        
-        if content:
-            target_label.configure(text=feature_name)
-            if pane_target == "left":
-                self.left_pane_content = content
-                self.left_pane_feature_name = feature_name
-            else:
-                self.right_pane_content = content
-                self.right_pane_feature_name = feature_name
-            self.last_active_pane = pane_target
+
+        target_frame.grid(row=0, column=0, sticky="nsew")
+        target_label.configure(text=feature_name)
 
     def _enter_fullscreen_map_mode(self):
         self.pre_map_left_pane_feature = self.left_pane_feature_name
         self.pre_map_right_pane_feature = self.right_pane_feature_name
-        self.paned_window.pack_forget()
-        self.fullscreen_map_frame.pack(in_=self.main_content_area, fill="both", expand=True)
+        self.paned_window.grid_forget()
+        self.fullscreen_map_frame.grid(row=0, column=0, sticky="nsew")
         self.is_map_fullscreen = True
-        map_content = self.feature_cache.get("Map Editor")
-        if map_content:
-            map_container = map_content['container']
-            map_container.pack_forget()
-            map_container.pack(in_=self.fullscreen_map_frame, fill="both", expand=True)
-        else:
-            map_container = ctk.CTkFrame(self.fullscreen_map_frame, fg_color="transparent")
-            map_container.pack(fill="both", expand=True)
-            map_controller = MapController(self, map_container, self.current_campaign_path)
-            self.feature_cache["Map Editor"] = {'controller': map_controller, 'container': map_container}
-            if hasattr(map_controller, 'handle_rule_set_load') and self.ruleset_data:
-                map_controller.handle_rule_set_load(self.ruleset_data)
+        self._ensure_and_display_feature("Map Editor", "fullscreen")
 
     def _exit_fullscreen_map_mode(self):
-        if "Map Editor" in self.feature_cache:
-            self.feature_cache["Map Editor"]['container'].pack_forget()
-        self.fullscreen_map_frame.pack_forget()
-        self.paned_window.pack(fill="both", expand=True)
+        self.pane_containers['fullscreen']["Map Editor"].grid_forget()
+        self.fullscreen_map_frame.grid_forget()
+        self.paned_window.grid(row=0, column=0, sticky="nsew")
         self.is_map_fullscreen = False
         self.load_feature_into_pane(self.pre_map_left_pane_feature, "left")
         self.load_feature_into_pane(self.pre_map_right_pane_feature, "right")
 
     def get_loaded_controller(self, controller_class):
-        for feature in self.feature_cache.values():
-            if isinstance(feature['controller'], controller_class):
-                return feature['controller']
+        for controller in self.feature_cache.values():
+            if isinstance(controller, controller_class):
+                return controller
         return None
 
     def set_dirty_flag(self, is_dirty=True):

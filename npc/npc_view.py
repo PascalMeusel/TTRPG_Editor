@@ -1,14 +1,17 @@
 import customtkinter as ctk
 from character.character_view import AddItemDialog
 from ui_extensions import AutoWidthComboBox
+from quest.quest_controller import QuestController
 
 class NpcView:
+    """Manages the UI for the self-contained NPC feature."""
     def __init__(self, parent_frame):
-        self.parent_frame = parent_frame
-        self.tab_view = ctk.CTkTabview(parent_frame, fg_color="transparent")
-        self.tab_view.pack(fill="both", expand=True, padx=5, pady=5)
-        self.creator_tab = self.tab_view.add("Creator")
-        self.sheet_tab = self.tab_view.add("Sheet")
+        self.frame = ctk.CTkTabview(parent_frame, fg_color="transparent")
+        self.frame.pack(fill="both", expand=True, padx=5, pady=5)
+
+        self.creator_tab = self.frame.add("Creator")
+        self.sheet_tab = self.frame.add("Sheet")
+        
         self.npc_creator_entries = {}
         self.npc_sheet_entries = {}
         self.sheet_is_built = False
@@ -18,7 +21,6 @@ class NpcView:
         self.setup_sheet_ui(controller)
 
     def _setup_creator_ui(self, controller):
-        # ... (This method is unchanged) ...
         container = ctk.CTkFrame(self.creator_tab, fg_color="transparent")
         container.pack(fill="both", expand=True)
         container.grid_columnconfigure(0, weight=1)
@@ -39,7 +41,7 @@ class NpcView:
         ctk.CTkLabel(name_frame, text="NPC Name:", anchor="w").pack(side="left", padx=5)
         self.npc_name_entry = ctk.CTkEntry(name_frame)
         self.npc_name_entry.pack(side="left", fill="x", expand=True)
-        self.npc_creator_fields_frame = ctk.CTkScrollableFrame(create_frame)
+        self.npc_creator_fields_frame = ctk.CTkScrollableFrame(create_frame, label_text="Attributes & Skills")
         self.npc_creator_fields_frame.grid(row=2, column=0, pady=10, padx=10, sticky="nsew")
         gm_fields_frame = ctk.CTkFrame(create_frame, fg_color="transparent")
         gm_fields_frame.grid(row=3, column=0, pady=10, padx=10, sticky="ew")
@@ -134,11 +136,8 @@ class NpcView:
         self.sheet_content_wrapper.grid_rowconfigure(1, weight=1)
         self.sheet_name_label = ctk.CTkLabel(self.sheet_content_wrapper, text="", font=ctk.CTkFont(size=20, weight="bold"))
         self.sheet_name_label.grid(row=0, column=0, columnspan=2, pady=5, sticky="w", padx=10)
-        
         stats_frame = ctk.CTkScrollableFrame(self.sheet_content_wrapper, label_text="Stats & Skills")
         stats_frame.grid(row=1, column=0, sticky="nsew", padx=(0, 10))
-        
-        # Dedicated HP section
         hp_frame = ctk.CTkFrame(stats_frame, fg_color="gray20")
         hp_frame.pack(fill="x", padx=5, pady=5)
         hp_frame.grid_columnconfigure(1, weight=1)
@@ -149,13 +148,14 @@ class NpcView:
         ctk.CTkLabel(hp_frame, text="Max HP:", anchor="w").grid(row=1, column=0, padx=5, pady=2)
         self.max_hp_label = ctk.CTkLabel(hp_frame, text="10", anchor="w")
         self.max_hp_label.grid(row=1, column=1, sticky="w", padx=5, pady=2)
-
+        
         gm_pane = ctk.CTkFrame(self.sheet_content_wrapper)
         gm_pane.grid(row=1, column=1, sticky="nsew", padx=(10, 0))
         gm_pane.grid_columnconfigure(0, weight=1)
-        gm_pane.grid_rowconfigure(1, weight=2)
-        gm_pane.grid_rowconfigure(3, weight=1)
-        
+        gm_pane.grid_rowconfigure(1, weight=2) # Notes expand
+        gm_pane.grid_rowconfigure(3, weight=1) # Inventory expand
+        gm_pane.grid_rowconfigure(5, weight=1) # Quests expand
+
         all_stat_keys = rule_set['attributes'] + list(rule_set['skills'].keys())
         for key in all_stat_keys:
             if key == "Hit Points": continue
@@ -166,6 +166,7 @@ class NpcView:
             entry.pack(side="left", fill="x", expand=True)
             self.npc_sheet_entries[key] = entry
             entry.bind("<KeyRelease>", controller.mark_as_dirty)
+            
         ctk.CTkLabel(gm_pane, text="GM Notes", font=ctk.CTkFont(size=14, weight="bold")).grid(row=0, column=0, sticky="w", pady=(0,5))
         self.sheet_notes_text = ctk.CTkTextbox(gm_pane)
         self.sheet_notes_text.grid(row=1, column=0, sticky="nsew")
@@ -176,6 +177,11 @@ class NpcView:
         ctk.CTkButton(inv_header_frame, text="Add Item", width=80, command=controller.show_add_item_dialog).pack(side="right")
         self.inventory_list_frame = ctk.CTkScrollableFrame(gm_pane)
         self.inventory_list_frame.grid(row=3, column=0, sticky="nsew")
+        
+        ctk.CTkLabel(gm_pane, text="Linked Quests", font=ctk.CTkFont(size=14, weight="bold")).grid(row=4, column=0, sticky="w", pady=(10,5))
+        self.linked_quests_frame = ctk.CTkScrollableFrame(gm_pane, label_text="")
+        self.linked_quests_frame.grid(row=5, column=0, sticky="nsew", pady=(0, 10))
+        
         button_frame = ctk.CTkFrame(self.sheet_content_wrapper, fg_color="transparent")
         button_frame.grid(row=2, column=0, columnspan=2, pady=20)
         ctk.CTkButton(button_frame, text="Save Changes", command=controller.save_npc_sheet).pack(side="left", padx=10)
@@ -185,21 +191,23 @@ class NpcView:
     def display_sheet_data(self, npc, item_controller, npc_controller):
         if not self.sheet_is_built: return
         self.sheet_name_label.configure(text=npc.name)
-        all_items_data = {item['id']: item for item in item_controller.all_items}
+        
         effective_attrs = npc.attributes.copy()
-        for inv_entry in npc.inventory:
-            if inv_entry.get("equipped", False):
-                item_id = inv_entry["item_id"]
-                if item_id in all_items_data:
-                    item_details = all_items_data[item_id]
-                    for modifier in item_details.get("modifiers", []):
-                        stat = modifier["stat"]
-                        value = modifier["value"]
-                        if stat in effective_attrs:
-                            try:
-                                current_val = int(effective_attrs.get(stat, 0))
-                                effective_attrs[stat] = str(current_val + value)
-                            except ValueError: pass
+        if item_controller:
+            all_items_data = {item['id']: item for item in item_controller.all_items}
+            for inv_entry in npc.inventory:
+                if inv_entry.get("equipped", False):
+                    item_id = inv_entry["item_id"]
+                    if item_id in all_items_data:
+                        item_details = all_items_data[item_id]
+                        for modifier in item_details.get("modifiers", []):
+                            stat = modifier["stat"]
+                            value = modifier["value"]
+                            if stat in effective_attrs:
+                                try:
+                                    current_val = int(effective_attrs.get(stat, 0))
+                                    effective_attrs[stat] = str(current_val + value)
+                                except ValueError: pass
         
         base_max_hp_str = npc.attributes.get("Hit Points", "10")
         effective_max_hp_str = effective_attrs.get("Hit Points", base_max_hp_str)
@@ -218,14 +226,35 @@ class NpcView:
                  display_text = f"{effective_value} ({base_value})"
             entry.delete(0, 'end')
             entry.insert(0, display_text)
+        
         self.sheet_notes_text.delete("1.0", "end")
         self.sheet_notes_text.insert("1.0", npc.gm_notes)
+        
+        quest_controller = npc_controller.app_controller.get_loaded_controller(QuestController)
+        self.display_linked_quests(npc.name, quest_controller)
         self.display_inventory(npc.inventory, item_controller, npc_controller)
         self.sheet_content_wrapper.pack(fill="both", expand=True)
+
+    def display_linked_quests(self, npc_name, quest_controller):
+        for widget in self.linked_quests_frame.winfo_children():
+            widget.destroy()
+        if not quest_controller:
+            ctk.CTkLabel(self.linked_quests_frame, text="Open 'Quests' pane\nto see links.", wraplength=150).pack(pady=10)
+            return
+        linked_quests = [q for q in quest_controller.get_all_quests() if npc_name in q.get('linked_npcs', [])]
+        if not linked_quests:
+            ctk.CTkLabel(self.linked_quests_frame, text="Not linked to any quests.").pack(pady=10)
+        else:
+            for quest in linked_quests:
+                quest_label = ctk.CTkLabel(self.linked_quests_frame, text=f"{quest['title']} ({quest['status']})", anchor="w")
+                quest_label.pack(fill="x", pady=2)
 
     def display_inventory(self, inventory_list, item_controller, npc_controller):
         for widget in self.inventory_list_frame.winfo_children():
             widget.destroy()
+        if not item_controller:
+            ctk.CTkLabel(self.inventory_list_frame, text="Open 'Items' pane\nto manage inventory.", wraplength=150).pack(pady=10)
+            return
         all_items_data = {item['id']: item for item in item_controller.all_items}
         if not npc_controller: return
         for inv_entry in inventory_list:

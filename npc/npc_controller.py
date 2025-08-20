@@ -4,10 +4,10 @@ from .npc_view import NpcView
 from custom_dialogs import MessageBox
 from character.character_view import AddItemDialog
 from item.item_controller import ItemController
+from quest.quest_controller import QuestController
 from .npc_generator_model import NpcGeneratorModel
 
 class NpcController:
-    """Controller for the self-contained NPC feature."""
     def __init__(self, app_controller, parent_frame, campaign_path):
         self.app_controller = app_controller
         self.view = NpcView(parent_frame)
@@ -19,6 +19,9 @@ class NpcController:
 
     def get_item_controller(self):
         return self.app_controller.get_loaded_controller(ItemController)
+
+    def get_quest_controller(self):
+        return self.app_controller.get_loaded_controller(QuestController)
 
     def get_npc_list(self):
         if self.current_rule_set:
@@ -49,7 +52,6 @@ class NpcController:
         self.current_npc = None
 
     def generate_random_npc(self):
-        """Generates a random NPC based on the loaded ruleset and populates the fields."""
         if not self.current_rule_set:
             MessageBox.showerror("Error", "A rule set must be loaded to generate an NPC.", self.view.parent_frame)
             return
@@ -57,11 +59,8 @@ class NpcController:
         if not item_controller:
             MessageBox.showerror("Error", "The Item Editor must be open to generate items.", self.view.parent_frame)
             return
-
         generator = NpcGeneratorModel()
-        # --- FIX: Pass the entire ruleset to the generator ---
         npc_data = generator.generate(self.current_rule_set)
-        
         created_items = []
         all_item_names = [item['name'].lower() for item in item_controller.all_items]
         for item_to_create_data in npc_data["items_to_create"]:
@@ -74,10 +73,8 @@ class NpcController:
                         created_items.append(item)
                         break
         item_controller.load_all_items()
-        
         self.generated_npc_data = npc_data
         self.generated_npc_data['created_items'] = created_items
-
         self.view.populate_creator_fields(npc_data)
         MessageBox.showinfo("NPC Generated", f"Generated a new {npc_data['name']}! Review and save when ready.", self.view.parent_frame)
 
@@ -96,14 +93,11 @@ class NpcController:
                 npc.attributes[key] = value
             elif key in self.current_rule_set['skills']:
                 npc.skills[key] = value
-        
         npc.current_hp = npc.attributes.get("Hit Points", "10")
         npc.gm_notes = self.view.npc_notes_text.get("1.0", "end-1c")
-        
         if self.generated_npc_data and self.generated_npc_data["name"] == name:
             for item in self.generated_npc_data.get("created_items", []):
                 npc.inventory.append({"item_id": item["id"], "quantity": 1, "equipped": True})
-        
         npc.save()
         MessageBox.showinfo("Success", f"NPC '{name}' saved.", self.view.parent_frame)
         self.app_controller.on_character_or_npc_list_changed()
@@ -123,28 +117,30 @@ class NpcController:
                 MessageBox.showerror("Error", f"Could not find file for NPC '{npc_name}'.", self.view.parent_frame)
 
     def load_npc_to_sheet(self, refresh=False):
+        # --- FIX: Get controllers, but allow them to be None ---
         item_controller = self.get_item_controller()
-        if not item_controller:
-            MessageBox.showerror("Error", "The Item Editor must be open to manage inventory.", self.view.parent_frame)
-            return
+        quest_controller = self.get_quest_controller()
+
         npc_name = self.current_npc.name if (refresh and self.current_npc) else self.view.npc_sheet_list.get().strip()
         if not npc_name or npc_name == "-":
             self.current_npc = None
             self.view.clear_sheet()
             return
+            
         self.current_npc = NpcModel.load(self.campaign_path, npc_name)
         if not self.current_npc:
             MessageBox.showerror("Error", f"Could not load NPC: {npc_name}", self.view.parent_frame)
             return
+        
+        # The view will handle cases where controllers are None
         self.view.display_sheet_data(self.current_npc, item_controller, self)
+        
         if not refresh:
             self.app_controller.set_dirty_flag(False)
         
     def save_npc_sheet(self):
         if not self.current_npc: return
-        
         self.current_npc.current_hp = self.view.current_hp_entry.get()
-        
         for key, entry in self.view.npc_sheet_entries.items():
             full_value = entry.get()
             if "(" in full_value and full_value.endswith(")"):
@@ -155,7 +151,6 @@ class NpcController:
                 self.current_npc.attributes[key] = base_value
             elif key in self.current_npc.skills:
                 self.current_npc.skills[key] = base_value
-                
         self.current_npc.gm_notes = self.view.sheet_notes_text.get("1.0", "end-1c")
         self.current_npc.save()
         self.app_controller.set_dirty_flag(False)
@@ -178,7 +173,7 @@ class NpcController:
         if not self.current_npc: return
         item_controller = self.get_item_controller()
         if not item_controller:
-            MessageBox.showerror("Error", "The Item Editor must be open to add items.", self.view.parent_frame)
+            MessageBox.showerror("Error", "The 'Items' feature must be open in a pane to add items.", self.view.parent_frame)
             return
         dialog = AddItemDialog(parent=self.view.parent_frame, all_items=item_controller.all_items)
         selected_item = dialog.get_selection()
