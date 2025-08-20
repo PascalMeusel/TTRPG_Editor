@@ -21,28 +21,22 @@ class AppController:
         self.root = root
         self.root.grid_columnconfigure(0, weight=1)
         self.root.grid_rowconfigure(0, weight=1)
-
         self.campaign_model = CampaignModel()
         self.current_campaign_path = None
         self.editor_frame = None
         self.unsaved_changes = False
         self.ruleset_data = None
-        
         self.left_pane_content = None
         self.right_pane_content = None
-        
         self.left_pane_pinned = False
         self.right_pane_pinned = False
         self.last_active_pane = "right"
-
         self.feature_cache = {}
-        
         self.is_map_fullscreen = False
-        self.left_pane_feature_name = "Characters"
-        self.right_pane_feature_name = "Items"
-        self.pre_map_left_pane_feature = self.left_pane_feature_name
-        self.pre_map_right_pane_feature = self.right_pane_feature_name
-
+        self.left_pane_feature_name = None
+        self.right_pane_feature_name = None
+        self.pre_map_left_pane_feature = "Characters"
+        self.pre_map_right_pane_feature = "Items"
         self.main_menu_view = MainMenuView(root, self)
         self.show_main_menu()
 
@@ -102,6 +96,8 @@ class AppController:
             self.left_pin_button.pack(side="right", padx=5, pady=5)
             self.left_pane_frame = ctk.CTkFrame(self.left_pane_wrapper, fg_color="transparent")
             self.left_pane_frame.grid(row=1, column=0, sticky="nsew")
+            self.left_pane_frame.grid_rowconfigure(0, weight=1)
+            self.left_pane_frame.grid_columnconfigure(0, weight=1)
             self.right_pane_wrapper = ctk.CTkFrame(self.paned_window, fg_color="gray14", corner_radius=0, border_width=2, border_color="gray25")
             self.right_pane_wrapper.grid_columnconfigure(0, weight=1)
             self.right_pane_wrapper.grid_rowconfigure(1, weight=1)
@@ -114,6 +110,8 @@ class AppController:
             self.right_pin_button.pack(side="right", padx=5, pady=5)
             self.right_pane_frame = ctk.CTkFrame(self.right_pane_wrapper, fg_color="transparent")
             self.right_pane_frame.grid(row=1, column=0, sticky="nsew")
+            self.right_pane_frame.grid_rowconfigure(0, weight=1)
+            self.right_pane_frame.grid_columnconfigure(0, weight=1)
             self.fullscreen_map_frame = ctk.CTkFrame(self.main_content_area, fg_color="transparent")
             self.paned_window.pack(fill="both", expand=True)
             self.music_controller = MusicController(self, header_right)
@@ -158,7 +156,11 @@ class AppController:
                 self.left_pin_button.configure(fg_color="transparent")
 
     def load_feature(self, feature_name):
-        if self.left_pane_pinned and self.right_pane_pinned: self.load_feature_into_pane(feature_name, "right")
+        if feature_name == self.left_pane_feature_name or feature_name == self.right_pane_feature_name:
+            return
+        if self.left_pane_pinned and self.right_pane_pinned:
+            MessageBox.showinfo("Info", "Both panes are pinned. Unpin one to load a new feature.", self.root)
+            return
         elif self.left_pane_pinned: self.load_feature_into_pane(feature_name, "right")
         elif self.right_pane_pinned: self.load_feature_into_pane(feature_name, "left")
         elif self.last_active_pane == "right": self.load_feature_into_pane(feature_name, "left")
@@ -171,24 +173,31 @@ class AppController:
         context_menu.tk_popup(event.x_root, event.y_root)
 
     def load_feature_into_pane(self, feature_name, pane_target):
+        if (pane_target == "left" and feature_name == self.left_pane_feature_name) or \
+           (pane_target == "right" and feature_name == self.right_pane_feature_name):
+            return
         if feature_name == "Map Editor":
             if not self.is_map_fullscreen: self._enter_fullscreen_map_mode()
             return
         elif self.is_map_fullscreen: self._exit_fullscreen_map_mode()
+        
         target_frame = self.left_pane_frame if pane_target == "left" else self.right_pane_frame
         target_label = self.left_pane_label if pane_target == "left" else self.right_pane_label
-        for widget in target_frame.winfo_children(): widget.pack_forget()
+        
+        for widget in target_frame.winfo_children():
+            widget.grid_forget()
+
         if pane_target == "left": self.left_pane_content = None
         else: self.right_pane_content = None
+
         if feature_name in self.feature_cache:
             cached_feature = self.feature_cache[feature_name]
             content = cached_feature['controller']
             feature_container = cached_feature['container']
-            feature_container.master = target_frame
-            feature_container.pack(fill="both", expand=True)
+            feature_container.grid(in_=target_frame, row=0, column=0, sticky="nsew")
         else:
             feature_container = ctk.CTkFrame(target_frame, fg_color="transparent")
-            feature_container.pack(fill="both", expand=True)
+            feature_container.grid(row=0, column=0, sticky="nsew")
             content = None
             if feature_name == "Characters": content = CharacterController(self, feature_container, self.current_campaign_path)
             elif feature_name == "NPCs": content = NpcController(self, feature_container, self.current_campaign_path)
@@ -198,6 +207,7 @@ class AppController:
                 self.feature_cache[feature_name] = {'controller': content, 'container': feature_container}
                 if hasattr(content, 'handle_rule_set_load') and self.ruleset_data:
                     content.handle_rule_set_load(self.ruleset_data)
+        
         if content:
             target_label.configure(text=feature_name)
             if pane_target == "left":
@@ -217,8 +227,8 @@ class AppController:
         map_content = self.feature_cache.get("Map Editor")
         if map_content:
             map_container = map_content['container']
-            map_container.master = self.fullscreen_map_frame
-            map_container.pack(fill="both", expand=True)
+            map_container.pack_forget()
+            map_container.pack(in_=self.fullscreen_map_frame, fill="both", expand=True)
         else:
             map_container = ctk.CTkFrame(self.fullscreen_map_frame, fg_color="transparent")
             map_container.pack(fill="both", expand=True)
@@ -310,7 +320,6 @@ class AppController:
             if hasattr(content, 'update_token_placer_list'): content.update_token_placer_list()
 
     def refresh_char_npc_sheet_if_loaded(self):
-        """Finds loaded Character/NPC controllers and tells them to refresh."""
         char_controller = self.get_loaded_controller(CharacterController)
         if char_controller and char_controller.current_character:
             char_controller.load_character_to_sheet(refresh=True)

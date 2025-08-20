@@ -49,6 +49,7 @@ class NpcController:
         self.current_npc = None
 
     def generate_random_npc(self):
+        """Generates a random NPC based on the loaded ruleset and populates the fields."""
         if not self.current_rule_set:
             MessageBox.showerror("Error", "A rule set must be loaded to generate an NPC.", self.view.parent_frame)
             return
@@ -56,8 +57,11 @@ class NpcController:
         if not item_controller:
             MessageBox.showerror("Error", "The Item Editor must be open to generate items.", self.view.parent_frame)
             return
+
         generator = NpcGeneratorModel()
+        # --- FIX: Pass the entire ruleset to the generator ---
         npc_data = generator.generate(self.current_rule_set)
+        
         created_items = []
         all_item_names = [item['name'].lower() for item in item_controller.all_items]
         for item_to_create_data in npc_data["items_to_create"]:
@@ -70,8 +74,10 @@ class NpcController:
                         created_items.append(item)
                         break
         item_controller.load_all_items()
+        
         self.generated_npc_data = npc_data
         self.generated_npc_data['created_items'] = created_items
+
         self.view.populate_creator_fields(npc_data)
         MessageBox.showinfo("NPC Generated", f"Generated a new {npc_data['name']}! Review and save when ready.", self.view.parent_frame)
 

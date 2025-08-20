@@ -3,9 +3,9 @@ from .map_model import MapModel
 from .map_view import MapView
 from .map_generation.map_generation_controller import MapGenerationController
 from custom_dialogs import MessageBox
-# --- FIX: Corrected import paths from project root ---
 from character.character_controller import CharacterController
 from npc.npc_controller import NpcController
+import customtkinter as ctk
 import math
 import os
 
@@ -23,12 +23,10 @@ class MapController:
         self.token_being_dragged = None
         self.drag_start_pos = {}
         self.drag_preview_pos = None
-
         self.view.setup_ui(self)
         self._initialize_blank_state()
 
     def _initialize_blank_state(self):
-        """Sets the map UI to a clean, empty state."""
         self.model = None
         self.current_level = 0
         self.selected_tokens = []
@@ -39,48 +37,32 @@ class MapController:
         self.refresh_map_list()
 
     def handle_rule_set_load(self, rule_set):
-        """Called when the editor loads to populate the token list."""
         self.update_token_placer_list()
 
     def show_new_map_dialog(self):
-        """Opens the new map generation dialog and loads the resulting data."""
         if self.model and self.app_controller.unsaved_changes:
             if not MessageBox.askyesno("Unsaved Changes", "This will erase the current unsaved map design. Are you sure?", self.view.parent_frame):
                 return
-
         gen_controller = MapGenerationController(parent_view=self.view.parent_frame)
         map_data = gen_controller.show_generation_dialog()
-
         if map_data:
             self.load_new_map_data(map_data)
 
     def load_new_map_data(self, map_data):
-        """Creates and loads a new MapModel instance from generated data."""
-        self.model = MapModel(
-            self.campaign_path,
-            name="New Generated Map",
-            width=map_data['width'],
-            height=map_data['height'],
-            grid_scale=map_data['grid_scale']
-        )
+        self.model = MapModel(self.campaign_path, name="New Generated Map", width=map_data['width'], height=map_data['height'], grid_scale=map_data['grid_scale'])
         self.model.map_type = map_data['map_type']
         self.model.levels = map_data['levels']
-        
         self.current_level = 0
         self.selected_tokens = []
         self.view.map_name_entry.delete(0, 'end')
         self.view.map_name_entry.insert(0, self.model.name)
         self.view.update_dimension_fields(self.model)
         self.set_tool("select")
-        
         self._sync_and_redraw_all_views()
         self.app_controller.set_dirty_flag(True)
 
     def change_level(self, delta):
-        """Changes the currently viewed level by a delta (+1 or -1)."""
-        if not self.model or self.model.map_type != 'inside':
-            return
-            
+        if not self.model or self.model.map_type != 'inside': return
         new_level = self.current_level + delta
         if new_level in self.model.levels:
             self.current_level = new_level
@@ -88,7 +70,7 @@ class MapController:
             self._sync_and_redraw_all_views()
         else:
             if MessageBox.askyesno("Create New Level?", f"Level {new_level} does not exist. Would you like to create a new blank level?", self.view.parent_frame):
-                self.model.levels[new_level] = {'elements': [], 'tokens': []}
+                self.model.levels[new_level] = {'elements': [], 'tokens': [], 'landmarks': []}
                 self.model.clear_map_level(new_level)
                 self.current_level = new_level
                 self.selected_tokens = []
@@ -96,39 +78,42 @@ class MapController:
                 self.app_controller.set_dirty_flag(True)
 
     def update_token_placer_list(self):
-        """Gathers PC and NPC names from other loaded controllers."""
         char_controller = self.app_controller.get_loaded_controller(CharacterController)
         npc_controller = self.app_controller.get_loaded_controller(NpcController)
-        
-        pc_list = []
-        npc_list = []
-
+        pc_list, npc_list = [], []
         if char_controller and hasattr(char_controller, 'get_character_list'):
             pc_list = [f"PC: {name}" for name in char_controller.get_character_list()]
         if npc_controller and hasattr(npc_controller, 'get_npc_list'):
             npc_list = [f"NPC: {name}" for name in npc_controller.get_npc_list()]
-            
         self.view.update_token_placer_list(pc_list + npc_list)
 
     def set_tool(self, tool_name):
         self.current_tool = tool_name
         if tool_name in ["brush", "rect"]:
             self.selected_tokens = []
-            if self.model:
-                self._redraw_viewer_canvas()
+            if self.model: self._redraw_viewer_canvas()
 
+    # --- FIX: Restored missing canvas event handlers ---
     def on_editor_canvas_press(self, event):
+        if not self.model: return
         self.editor_start_pos = (event.x, event.y)
+        if self.current_tool == "landmark":
+            landmark_text = self.view.landmark_text_entry.get()
+            if not landmark_text:
+                MessageBox.showwarning("Warning", "Please enter text for the landmark first.", self.view.parent_frame)
+                return
+            x_grid, y_grid = event.x // self.model.grid_size, event.y // self.model.grid_size
+            self.model.add_landmark(x_grid, y_grid, landmark_text, self.current_level)
+            self._sync_and_redraw_all_views()
+            self.app_controller.set_dirty_flag()
+            self.set_tool("select")
 
     def on_editor_canvas_drag(self, event):
         if not self.model: return
         if self.current_tool == "brush":
             x, y = event.x // self.model.grid_size, event.y // self.model.grid_size
-            self.model.add_element(
-                {'type': 'rect', 'coords': (x, y, x + 1, y + 1), 'color': self.view.color_var.get()},
-                self.current_level
-            )
-            self._redraw_editor_view_only()
+            self.model.add_element({'type': 'rect', 'coords': (x, y, x + 1, y + 1), 'color': self.view.color_var.get()}, self.current_level)
+            self.view.draw_editor_canvas(self.model, self.current_level)
             self.app_controller.set_dirty_flag()
 
     def on_editor_canvas_release(self, event):
@@ -138,35 +123,25 @@ class MapController:
             y0 = min(self.editor_start_pos[1], event.y) // self.model.grid_size
             x1 = max(self.editor_start_pos[0], event.x) // self.model.grid_size
             y1 = max(self.editor_start_pos[1], event.y) // self.model.grid_size
-            self.model.add_element(
-                {'type': 'rect', 'coords': (x0, y0, x1 + 1, y1 + 1), 'color': self.view.color_var.get()},
-                self.current_level
-            )
-            self._redraw_editor_view_only()
+            self.model.add_element({'type': 'rect', 'coords': (x0, y0, x1 + 1, y1 + 1), 'color': self.view.color_var.get()}, self.current_level)
+            self._sync_and_redraw_all_views()
             self.app_controller.set_dirty_flag()
         self.editor_start_pos = None
 
-    def on_editor_canvas_press(self, event):
+    def on_viewer_canvas_press(self, event):
         if not self.model: return
-        self.editor_start_pos = (event.x, event.y)
-
-        # --- NEW: Handle placing a landmark ---
-        if self.current_tool == "landmark":
-            landmark_text = self.view.landmark_text_entry.get()
-            if not landmark_text:
-                MessageBox.showwarning("Warning", "Please enter text for the landmark first.", self.view.parent_frame)
-                return
-            
-            x_grid = event.x // self.model.grid_size
-            y_grid = event.y // self.model.grid_size
-            
-            self.model.add_landmark(x_grid, y_grid, landmark_text, self.current_level)
-            self._redraw_editor_view_only()
-            self.app_controller.set_dirty_flag()
-            # Revert tool to select after placing one
+        x_grid, y_grid = event.x // self.model.grid_size, event.y // self.model.grid_size
+        if self.current_tool == "place_token":
+            token_str = self.view.token_placer_list.get()
+            if not token_str or "No tokens" in token_str or "Load" in token_str: return
+            token_type, token_name = token_str.split(': ', 1)
+            if self.model.add_token(token_name.strip(), token_type, x_grid, y_grid, self.current_level):
+                self._redraw_viewer_canvas()
+                self.app_controller.set_dirty_flag()
+            else:
+                MessageBox.showwarning("Warning", f"Token '{token_name.strip()}' is already on the map.", self.view.parent_frame)
             self.set_tool("select")
             return
-        
         clicked_token = self.model.get_token_at(x_grid, y_grid, self.current_level)
         if clicked_token:
             self.token_being_dragged = clicked_token
